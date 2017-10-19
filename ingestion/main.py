@@ -1,0 +1,147 @@
+import argparse
+import pathlib
+
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.neural_network import MLPClassifier
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.svm import SVC
+
+from fitmodel.fitmodel import do_grid_search
+from gridSearch.gridSearch import GridSearchCustomModel
+from processing.processing import create_dataframe, drop_column, join_dfs, apply_diff, create_y, drop_original_values, \
+    apply_macd
+from reporting.reporting import CustomReport
+from utility.utility import get_len_dfs
+
+TARGET_VARIABLE = "Close__diff"
+crossList = []
+# Stock version 
+if __name__ == "__main__":
+
+    # Getting path where CSVs are stored
+    parser = argparse.ArgumentParser("Ml Forex")
+    parser.add_argument("--datapath", help="complete path to CSV file directory")
+    parser.add_argument("--target", help="target variable")
+    args = parser.parse_args()
+    TARGET_VARIABLE = "Close_" + args.target + "_diff"
+    flist = [p for p in pathlib.Path(args.datapath).iterdir() if p.is_file()]
+    crossList.append(args.target)
+    # Creating n dataframe where n is the number of files
+    dfs = create_dataframe(flist, "Gmt time", crossList)
+
+    # Dropping volume columns
+    # dfs = drop_column(dfs, "Volume")
+    dfs = drop_column(dfs, "index")
+    dfs_len = get_len_dfs(dfs)
+
+    # Inner join on GMT time
+    df = join_dfs(dfs, "Gmt time")
+
+    # Check that len is the same (inner join validation)
+    # check_len_is_same(dfs_len, len(df.index))
+
+    # Applying MAC
+    df = apply_macd(df, 26, 12)
+
+    # Apply diff to the column except for Gmt time
+    df = apply_diff(df, "Gmt time")
+
+    # Close_xdiff is the difference between Close_i - Close_i-1 for EUR/USD
+    df['target'] = df.apply(lambda row: create_y(row, TARGET_VARIABLE), axis=1)
+
+    # We don't want to have target in the same row as Close_xdiff, we want to move it up (shifting)
+    # When we will make predictions in realtime, we want to predict Close_xdiff starting from previous row
+    df['target'] = df['target'].shift(-1)
+    df['target_in_pips'] = df[TARGET_VARIABLE].shift(-1)
+    #df = drop_column([df], "diff")[0]
+    df = drop_original_values(df, crossList)
+    # Apply percentage excluding the diff calculated above, gtm time and target column
+    # df = apply_percentage(df, ["diff", "Gmt time", "target", "pips"]).ix[1:][:-1]
+    # df = apply_mvavg(df, ["target", "_macdhist", "_signalline", "_macdline"], 5)
+    # df = apply_mvavg(df, ["target", "_mv_avg", "_macdhist", "_signalline", "_macdline"], 10)
+    df = df.replace([np.inf, -np.inf], np.nan)
+    df = df.dropna(how='any')
+    target_in_pips = df['target_in_pips']
+    gmt = df['Gmt time']
+    df = drop_column([df], "Gmt time")[0]
+    df = drop_column([df], 'target_in_pips')[0]
+    # df = modify_time([df])[0]
+    # df = df[df.target != 0]
+    plt.hist(df["target"].values.ravel())
+    plt.show()
+
+    # Preparing reporting object
+    report = CustomReport(args.datapath, df, TARGET_VARIABLE)
+    report.init()
+    # Splitting
+    # train_set, test_set = train_test_split(df, test_size=0.2, random_state=42)
+    total_length = df.shape[0]
+    start = 0
+    train_len = 200
+    test_len = 3
+
+    while start + train_len + test_len <= total_length:
+
+        train_set = df.iloc[start: start + train_len]
+        test_set = df.iloc[start + train_len + 1: start + train_len + 1 + test_len]
+        train_set = train_set.reset_index(drop=True)
+        test_set = test_set.reset_index(drop=True)
+        report.write_step(start, train_len, test_len)
+        # poly_features = PolynomialFeatures(degree=1, include_bias=False)
+
+        X_train = train_set.ix[:, train_set.columns != 'target']
+        y_train = train_set.ix[:, train_set.columns == 'target']
+        # X_train = poly_features.fit_transform(X_train)
+        X_test = test_set.ix[:, test_set.columns != 'target']
+        # X_test = poly_features.fit_transform(X_test)
+        y_test = test_set.ix[:, test_set.columns == 'target']
+
+        # Scaling X
+        sc = StandardScaler()
+        X_train = sc.fit_transform(X_train)
+        X_test = sc.transform(X_test)
+
+        # Need to remove 0 label
+
+        y_train_0 = y_train[y_train['target'] == 0].index.tolist()
+        y_test_0 = y_test[y_test['target'] == 0].index.tolist()
+
+        y_train = y_train[y_train["target"] != 0]
+        y_test = y_test[y_test["target"] != 0]
+
+        X_train = np.delete(X_train, y_train_0, axis=0)
+        X_test = np.delete(X_test, y_test_0, axis=0)
+
+        # Starting training
+
+        param_grid_log_reg = {'C': [0.001, 0.01, 0.1, 1]}
+        gdLog = GridSearchCustomModel(LogisticRegression(penalty='l2'), param_grid_log_reg)
+
+        param_grid_rf = {'n_estimators': [10, 20, 50, 100], 'max_depth': [5, 7, 12]}
+        gdRf = GridSearchCustomModel(RandomForestClassifier(n_jobs=-1), param_grid_rf)
+
+        param_grid_svm = {'C': [0.001, 0.01, 0.1, 1]}
+        gdSVM = GridSearchCustomModel(SVC(probability=True, kernel='linear'), param_grid_svm)
+
+        param_grid_ANN = {"hidden_layer_sizes": [(3,), (5,), (2, 2), (5, 5)],
+                          'activation': ['logistic', 'relu'],
+                          'alpha': [0.001, 0.01, 0.1, 1, 10]}
+
+        gdANN = GridSearchCustomModel(MLPClassifier(solver='sgd', verbose=False, max_iter=12000), param_grid_ANN)
+
+        best_models = do_grid_search([gdLog, gdRf], X_train, y_train.values.ravel())
+
+        for model in best_models:
+            report.write_score(model, X_train, y_train, X_test, y_test)
+
+        y_test_pred = report.write_combined_results(best_models, X_train, y_train, X_test, y_test)
+        report.write_result_in_pips(y_test_pred.tolist(),
+                                    gmt[start + train_len + 1: start + train_len + 1 + test_len].tolist(),
+                                    target_in_pips[start + train_len + 1: start + train_len + 1 + test_len].tolist())
+        start = start + test_len
+
+    report.close()
+    print('end')
