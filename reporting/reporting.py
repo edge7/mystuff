@@ -11,25 +11,29 @@ import datetime as dt
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
+
 class CustomReport(object):
-    def __init__(self, pathToWrite, df, target_variable):
+    def __init__(self, pathToWrite, df, target_variable, train_len, pred):
         self.list_pips_cum = []
         self.path = pathToWrite
         self.df = df
         self.target_variable = target_variable
         self.total_pips = 0
         self.list_pips = []
+        self.train_len = train_len
+        self.pred = pred
 
     def close(self):
         self.file_descriptor.close()
 
     def write_step(self, start, train_len, test_len):
-        self.file_descriptor.write("\n\n\n   ******** Starting step: " + str(start) + "  --  " + str(train_len) + " ---- " + str(test_len))
+        self.file_descriptor.write(
+            "\n\n\n   ******** Starting step: " + str(start) + "  --  " + str(train_len) + " ---- " + str(test_len))
 
     def init(self):
         # Creating file
         now = time.strftime("%c")
-        directory = os.path.join(self.path, "reporting", now)
+        directory = os.path.join(self.path, "reporting_train_len_" + str(self.train_len) + '_' + str(self.pred), now)
         if not os.path.exists(directory):
             os.makedirs(directory)
         self.file_path = os.path.join(directory, "reporting")
@@ -62,7 +66,7 @@ class CustomReport(object):
         self.file_descriptor.write("\n\n Writing y test \n\n")
         self.file_descriptor.write(" ".join(str(x) for x in y_test.values.tolist()))
         self.file_descriptor.write("\n\n")
-        #model = EnsembleClassifier([model.best_estimator_ for model in models])
+        # model = EnsembleClassifier([model.best_estimator_ for model in models])
         # Prediction on train set
         model.fit(X_train, y_train.values.ravel())
         y_train_pred = model.predict(X_train)
@@ -110,7 +114,7 @@ class CustomReport(object):
         self.file_descriptor.write("f1_test : \t")
         self.file_descriptor.write(str(f1))
         self.file_descriptor.write("\n --------------- \n")
-        return y_test_pred
+        return y_test_pred, model
 
     def write_result_in_pips(self, y_pred, gmt, target_in_pips):
         th = THRESHOLD
@@ -118,9 +122,9 @@ class CustomReport(object):
             y = val
             gm = gmt[idx]
             gm = gm.split(" ")[0]
-            gm = dt.datetime.strptime(gm,'%Y-%m-%d').date()
+            gm = dt.datetime.strptime(gm, '%Y-%m-%d').date()
             pips = target_in_pips[idx]
-            pips = pips * 1000
+
             if y > 0 and pips >= th or (y < 0 and pips < th):
                 self.total_pips += pips
                 self.list_pips.append((gm, abs(pips)))
@@ -131,6 +135,14 @@ class CustomReport(object):
                 self.list_pips_cum.append((gm, self.total_pips))
 
             self.write_chart()
+
+    def write_predictions_next(self, model, X, time):
+        self.file_descriptor.write("\n\n\n Writing predictions for time: " + str(time))
+        preds = model.predict(X)
+        self.file_descriptor.write("Model: " + str(model))
+        self.file_descriptor.write("\n Pred: " + str(preds))
+        self.file_descriptor.write("\n Prob: " + str(model.predict_proba(X)))
+
 
     def write_score(self, model, X_train, y_train, X_test, y_test):
 
@@ -191,13 +203,13 @@ class CustomReport(object):
         self.file_descriptor.write("\n --------------- \n")
 
     def write_chart(self):
-        x = [ item[0] for item in self.list_pips_cum]
-        y = [ item[1] for item in self.list_pips_cum]
+        x = [item[0] for item in self.list_pips_cum]
+        y = [item[1] for item in self.list_pips_cum]
         plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m.%d.%Y'))
         plt.gca().xaxis.set_major_locator(mdates.YearLocator())
 
         plt.plot(x, y)
-        plt.ylabel('PIPS')
+        plt.ylabel('Gain (in pips)')
         plt.xlabel('Time')
         plt.gcf().autofmt_xdate()
         plt.savefig(self.file_path + " pict.png")

@@ -1,7 +1,5 @@
 import argparse
 import pathlib
-
-import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -25,6 +23,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("Ml Forex")
     parser.add_argument("--datapath", help="complete path to CSV file directory")
     parser.add_argument("--target", help="target variable")
+    parser.add_argument("--train_len", help="train len")
+    parser.add_argument("--predict", help="predict next output")
+
     args = parser.parse_args()
     TARGET_VARIABLE = "Close_" + args.target + "_diff"
     flist = [p for p in pathlib.Path(args.datapath).iterdir() if p.is_file()]
@@ -39,7 +40,8 @@ if __name__ == "__main__":
 
     # Inner join on GMT time
     df = join_dfs(dfs, "Gmt time")
-
+    if args.predict == 'yes':
+        df = df.tail(int(args.train_len)*2)
     # Check that len is the same (inner join validation)
     # check_len_is_same(dfs_len, len(df.index))
 
@@ -49,19 +51,20 @@ if __name__ == "__main__":
     # Apply diff to the column except for Gmt time
     df = apply_diff(df, "Gmt time")
 
-    # Close_xdiff is the difference between Close_i - Close_i-1 for EUR/USD
+    # Close_xdiff is the difference between Close_i - Close_i-1
     df['target'] = df.apply(lambda row: create_y(row, TARGET_VARIABLE), axis=1)
 
     # We don't want to have target in the same row as Close_xdiff, we want to move it up (shifting)
     # When we will make predictions in realtime, we want to predict Close_xdiff starting from previous row
     df['target'] = df['target'].shift(-1)
     df['target_in_pips'] = df[TARGET_VARIABLE].shift(-1)
-    #df = drop_column([df], "diff")[0]
+    # df = drop_column([df], "diff")[0]
     df = drop_original_values(df, crossList)
     # Apply percentage excluding the diff calculated above, gtm time and target column
     # df = apply_percentage(df, ["diff", "Gmt time", "target", "pips"]).ix[1:][:-1]
     # df = apply_mvavg(df, ["target", "_macdhist", "_signalline", "_macdline"], 5)
     # df = apply_mvavg(df, ["target", "_mv_avg", "_macdhist", "_signalline", "_macdline"], 10)
+    df_prediction = df.copy()
     df = df.replace([np.inf, -np.inf], np.nan)
     df = df.dropna(how='any')
     target_in_pips = df['target_in_pips']
@@ -70,17 +73,18 @@ if __name__ == "__main__":
     df = drop_column([df], 'target_in_pips')[0]
     # df = modify_time([df])[0]
     # df = df[df.target != 0]
-    plt.hist(df["target"].values.ravel())
-    plt.show()
+    # plt.hist(df["target"].values.ravel())
+    # plt.show()
 
     # Preparing reporting object
-    report = CustomReport(args.datapath, df, TARGET_VARIABLE)
+    report = CustomReport(args.datapath, df, TARGET_VARIABLE, args.train_len, args.predict)
     report.init()
     # Splitting
     # train_set, test_set = train_test_split(df, test_size=0.2, random_state=42)
     total_length = df.shape[0]
     start = 0
-    train_len = 200
+    train_len = int(args.train_len)
+
     test_len = 3
 
     while start + train_len + test_len <= total_length:
@@ -137,11 +141,23 @@ if __name__ == "__main__":
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)
 
-        y_test_pred = report.write_combined_results(best_models, X_train, y_train, X_test, y_test)
+        y_test_pred, voting_classifier = report.write_combined_results(best_models, X_train, y_train, X_test, y_test)
         report.write_result_in_pips(y_test_pred.tolist(),
                                     gmt[start + train_len + 1: start + train_len + 1 + test_len].tolist(),
                                     target_in_pips[start + train_len + 1: start + train_len + 1 + test_len].tolist())
         start = start + test_len
+
+    if args.predict == 'yes':
+        to_predict = df_prediction.tail(1)
+        to_predict = drop_column([to_predict], 'target_in_pips')[0]
+        to_predict = drop_column([to_predict], 'target')[0]
+        gmt = to_predict['Gmt time']
+        to_predict = drop_column([to_predict], 'Gmt time')[0]
+        X = sc.transform(to_predict)
+        best_models = [model.best_estimator_ for model in best_models]
+        best_models.append(voting_classifier)
+        for model in best_models:
+            report.write_predictions_next(model, X, gmt)
 
     report.close()
     print('end')
