@@ -1,8 +1,5 @@
 from time import time
-
 from sklearn.model_selection import GridSearchCV
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 
 
 def fit_models(list_models, X, y):
@@ -14,7 +11,6 @@ def fit_models(list_models, X, y):
 
 
 def do_grid_search(list_models, X, y):
-
     to_return = []
     print("Shape X \n")
     print(X.shape)
@@ -25,7 +21,7 @@ def do_grid_search(list_models, X, y):
         print(model.model)
         print("  ...  \n")
         start = time()
-        clf = GridSearchCV(model.model, model.params, cv=3, n_jobs=-1, verbose=10, scoring='f1')
+        clf = GridSearchCV(model.model, model.params, cv=10, n_jobs=-1, verbose=1, scoring='f1')
         clf.fit(X, y)
         end = time()
         elapsed = (end - start) / 60.0

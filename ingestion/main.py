@@ -1,21 +1,23 @@
 import argparse
 import pathlib
+
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.neural_network import MLPClassifier
-from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 
-from fitmodel.fitmodel import do_grid_search
 from gridSearch.gridSearch import GridSearchCustomModel
 from processing.processing import create_dataframe, drop_column, join_dfs, apply_diff, create_y, drop_original_values, \
     apply_macd
 from reporting.reporting import CustomReport
 from utility.utility import get_len_dfs
+from fitmodel.fitmodel import do_grid_search
 
 TARGET_VARIABLE = "Close__diff"
 crossList = []
+
 # Stock version 
 if __name__ == "__main__":
 
@@ -121,22 +123,25 @@ if __name__ == "__main__":
 
         # Starting training
 
-        param_grid_log_reg = {'C': [0.001, 0.01, 0.1, 1]}
+        param_grid_log_reg = {'C': [0.03, 0.05, 0.1, 1, 10, 30, 100]}
         gdLog = GridSearchCustomModel(LogisticRegression(penalty='l2', max_iter=200), param_grid_log_reg)
 
         param_grid_rf = {'n_estimators': [50, 100, 120], 'max_depth': [5, 7, 12, 15]}
         gdRf = GridSearchCustomModel(RandomForestClassifier(n_jobs=-1), param_grid_rf)
 
-        param_grid_svm = {'C': [0.5, 1, 1.5, 2]}
-        gdSVM = GridSearchCustomModel(SVC(probability=True, kernel='linear'), param_grid_svm)
+        param_grid_svm = [
+            {'C': [0.5, 1, 2, 5, 10, 15], 'kernel': ['linear']},
+            {'C': [0.5, 1, 2, 5, 10, 15], 'gamma': [0.001, 0.0001, 0.01, 1, 2], 'kernel': ['rbf']},
+        ]
+        gdSVM = GridSearchCustomModel(SVC(probability=True), param_grid_svm)
 
-        param_grid_ANN = {"hidden_layer_sizes": [(3,), (5,), (2, 2), (5, 5)],
-                          'activation': ['logistic', 'relu'],
+        param_grid_ANN = {"hidden_layer_sizes": [(3,), (5,), (2, 2), (5, 5), (10,10)],
+                          'activation': ['tanh', 'relu'],
                           'alpha': [0.001, 0.01, 0.1, 1, 10]}
 
         gdANN = GridSearchCustomModel(MLPClassifier(solver='sgd', verbose=False, max_iter=12000), param_grid_ANN)
 
-        best_models = do_grid_search([gdLog, gdRf, gdSVM], X_train, y_train.values.ravel())
+        best_models = do_grid_search([gdLog, gdRf, gdSVM, gdANN], X_train, y_train.values.ravel())
 
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)
