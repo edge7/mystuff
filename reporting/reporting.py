@@ -213,3 +213,8 @@ class CustomReport(object):
         plt.xlabel('Time')
         plt.gcf().autofmt_xdate()
         plt.savefig(self.file_path + " pict.png")
+
+    def write_prob_voting(self, voting_classifier, X):
+        probs = voting_classifier._collect_probas(X)
+        self.file_descriptor.write("\n\n\n Writing Prob. voting classifier: \n")
+        self.file_descriptor.write(str(probs))

@@ -40,8 +40,8 @@ if __name__ == "__main__":
 
     # Inner join on GMT time
     df = join_dfs(dfs, "Gmt time")
-    if args.predict == 'yes':
-        df = df.tail(int(args.train_len)*2)
+    #if args.predict == 'yes':
+    #    df = df.tail(int(args.train_len)*2)
     # Check that len is the same (inner join validation)
     # check_len_is_same(dfs_len, len(df.index))
 
@@ -122,12 +122,12 @@ if __name__ == "__main__":
         # Starting training
 
         param_grid_log_reg = {'C': [0.001, 0.01, 0.1, 1]}
-        gdLog = GridSearchCustomModel(LogisticRegression(penalty='l2'), param_grid_log_reg)
+        gdLog = GridSearchCustomModel(LogisticRegression(penalty='l2', max_iter=200), param_grid_log_reg)
 
-        param_grid_rf = {'n_estimators': [10, 20, 50, 100], 'max_depth': [5, 7, 12]}
+        param_grid_rf = {'n_estimators': [50, 100, 120], 'max_depth': [5, 7, 12, 15]}
         gdRf = GridSearchCustomModel(RandomForestClassifier(n_jobs=-1), param_grid_rf)
 
-        param_grid_svm = {'C': [0.001, 0.01, 0.1, 1]}
+        param_grid_svm = {'C': [0.5, 1, 1.5, 2]}
         gdSVM = GridSearchCustomModel(SVC(probability=True, kernel='linear'), param_grid_svm)
 
         param_grid_ANN = {"hidden_layer_sizes": [(3,), (5,), (2, 2), (5, 5)],
@@ -136,7 +136,7 @@ if __name__ == "__main__":
 
         gdANN = GridSearchCustomModel(MLPClassifier(solver='sgd', verbose=False, max_iter=12000), param_grid_ANN)
 
-        best_models = do_grid_search([gdLog, gdRf], X_train, y_train.values.ravel())
+        best_models = do_grid_search([gdLog, gdRf, gdSVM], X_train, y_train.values.ravel())
 
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)
@@ -145,7 +145,7 @@ if __name__ == "__main__":
         report.write_result_in_pips(y_test_pred.tolist(),
                                     gmt[start + train_len + 1: start + train_len + 1 + test_len].tolist(),
                                     target_in_pips[start + train_len + 1: start + train_len + 1 + test_len].tolist())
-        start = start + test_len
+        start += test_len
 
     if args.predict == 'yes':
         to_predict = df_prediction.tail(1)
@@ -158,6 +158,7 @@ if __name__ == "__main__":
         best_models.append(voting_classifier)
         for model in best_models:
             report.write_predictions_next(model, X, gmt)
+        report.write_prob_voting(voting_classifier, X)
 
     report.close()
     print('end')
