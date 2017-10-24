@@ -2,7 +2,7 @@ import argparse
 import pathlib
 
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
@@ -42,7 +42,7 @@ if __name__ == "__main__":
 
     # Inner join on GMT time
     df = join_dfs(dfs, "Gmt time")
-    #if args.predict == 'yes':
+    # if args.predict == 'yes':
     #    df = df.tail(int(args.train_len)*2)
     # Check that len is the same (inner join validation)
     # check_len_is_same(dfs_len, len(df.index))
@@ -126,22 +126,28 @@ if __name__ == "__main__":
         param_grid_log_reg = {'C': [0.03, 0.05, 0.1, 1, 10, 30, 100]}
         gdLog = GridSearchCustomModel(LogisticRegression(penalty='l2', max_iter=200), param_grid_log_reg)
 
-        param_grid_rf = {'n_estimators': [50, 100, 120], 'max_depth': [5, 7, 12, 15]}
-        gdRf = GridSearchCustomModel(RandomForestClassifier(n_jobs=-1), param_grid_rf)
+        param_grid_rf = {'n_estimators': [50, 100, 120], 'max_depth': [5, 7, 12, 15],
+                         'max_features': [ 0.38, 0.5, 0.7, 1.0]}
+        gdRf = GridSearchCustomModel(RandomForestClassifier(n_jobs=-1, random_state=42), param_grid_rf)
 
         param_grid_svm = [
-            {'C': [0.5, 1, 2, 5, 10, 15], 'kernel': ['linear']},
-            {'C': [0.5, 1, 2, 5, 10, 15], 'gamma': [0.001, 0.0001, 0.01, 1, 2], 'kernel': ['rbf']},
+            {'C': [1, 2, 5, 10, 15], 'kernel': ['linear']},
+            {'C': [1, 2, 5, 10, 15], 'gamma': [0.001, 0.0001, 0.01, 1, 2, 5], 'kernel': ['rbf']},
         ]
         gdSVM = GridSearchCustomModel(SVC(probability=True), param_grid_svm)
 
-        param_grid_ANN = {"hidden_layer_sizes": [(3,), (5,), (2, 2), (5, 5), (10,10)],
+        param_grid_GB = {'learning_rate': [0.1, 0.2, 0.5], 'n_estimators': [50, 100, 120], 'max_depth': [3, 5, 7, 10],
+                         'max_features': [ 0.38, 0.5, 0.7, 1.0]}
+
+        gdGB = GridSearchCustomModel(GradientBoostingClassifier(random_state=42), param_grid_GB)
+
+        param_grid_ANN = {"hidden_layer_sizes": [(8, 3), (5, 5), (10, 10), (10, 5), (6, 2), (4, 7)],
                           'activation': ['tanh', 'relu'],
-                          'alpha': [0.001, 0.01, 0.1, 1, 10]}
+                          'alpha': [0.01, 0.1, 1, 5, 10]}
 
         gdANN = GridSearchCustomModel(MLPClassifier(solver='sgd', verbose=False, max_iter=12000), param_grid_ANN)
 
-        best_models = do_grid_search([gdLog, gdRf, gdSVM, gdANN], X_train, y_train.values.ravel())
+        best_models = do_grid_search([gdLog, gdRf, gdSVM, gdGB], X_train, y_train.values.ravel())
 
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)
