@@ -21,7 +21,7 @@ def do_grid_search(list_models, X, y):
         print(model.model)
         print("  ...  \n")
         start = time()
-        clf = GridSearchCV(model.model, model.params, cv=10, n_jobs=-1, verbose=1, scoring='f1')
+        clf = GridSearchCV(model.model, model.params, cv=5, n_jobs=-1, verbose=1, scoring='f1')
         clf.fit(X, y)
         end = time()
         elapsed = (end - start) / 60.0

@@ -141,8 +141,8 @@ if __name__ == "__main__":
 
         gdGB = GridSearchCustomModel(GradientBoostingClassifier(random_state=42, max_features='auto'), param_grid_GB)
 
-        param_grid_ANN = {"hidden_layer_sizes": [(50,), (15,), (100,), (8, 3), (5, 5), (10, 10), (40, 40), (10, 5), (100,3),
-                                                 (15, 13), (12, 19)],
+        param_grid_ANN = {"hidden_layer_sizes": [(20,20), (15,), (8, 3), (5, 5), (10, 10), (40, 40), (10, 5),
+                                                 (15, 13), (5, 10)],
                           'activation': ['tanh', 'relu'],
                           'alpha': 10.0 ** -np.arange(1, 7)}
 
