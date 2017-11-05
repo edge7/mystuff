@@ -1,7 +1,9 @@
 import pandas as pd
 from numpy import nan
+import numpy as np
 
 THRESHOLD = 0
+
 
 def apply_candle(row, toUse):
     close = row["Close_" + toUse]
@@ -42,7 +44,7 @@ def create_cols(l):
     low_before_before.append(nan)
     # Iterate from the first to the last
     old_i = None
-    for idx,i in enumerate(l):
+    for idx, i in enumerate(l):
         if old_i is not None:
             high_before.append(old_i[0])
             low_before.append(old_i[2])
@@ -51,9 +53,9 @@ def create_cols(l):
         old_i = i
 
         if idx >= 2:
-            high_before_before.append(l[idx-2][0])
-            low_before_before.append(l[idx-2][2])
-            body_before_before.append(l[idx-2][1])
+            high_before_before.append(l[idx - 2][0])
+            low_before_before.append(l[idx - 2][2])
+            body_before_before.append(l[idx - 2][1])
         high.append(i[0])
         body.append(i[1])
         low.append(i[2])
@@ -68,8 +70,9 @@ def create_cols(l):
         body_before_before.append(l[idx - 2][1])
 
     return [(pd.Series(high), pd.Series(high_before), pd.Series(high_before_before)),
-            ( pd.Series(body), pd.Series(body_before), pd.Series(body_before_before)), (pd.Series(low),
-            pd.Series(low_before), pd.Series(low_before_before))]
+            (pd.Series(body), pd.Series(body_before), pd.Series(body_before_before)), (pd.Series(low),
+                                                                                       pd.Series(low_before),
+                                                                                       pd.Series(low_before_before))]
 
 
 def add_candlestick_columns(df, toUse):
@@ -81,9 +84,9 @@ def add_candlestick_columns(df, toUse):
     df[toUse + "_High_in_pips"] = high_in_pips
     df[toUse + "_Body_in_pips"] = body_in_pips
     df[toUse + "_Low_in_pips"] = low_in_pips
-    #df[toUse + "_High/Body"] = abs(high_in_pips / body_in_pips)
-    #df[toUse + "_Low/body"] = abs(low_in_pips / body_in_pips)
-    #df[toUse + "_Low/High"] = abs(low_in_pips / high_in_pips)
+    # df[toUse + "_High/Body"] = abs(high_in_pips / body_in_pips)
+    # df[toUse + "_Low/body"] = abs(low_in_pips / body_in_pips)
+    # df[toUse + "_Low/High"] = abs(low_in_pips / high_in_pips)
     df[toUse + "_High-Low"] = abs(high_in_pips - low_in_pips)
     df[toUse + "_High-body"] = abs(high_in_pips) - abs(body_in_pips)
     df[toUse + "_Low-body"] = abs(low_in_pips) - abs(body_in_pips)
@@ -95,9 +98,9 @@ def add_candlestick_columns(df, toUse):
     df[toUse + "_Low_in_pips_bef"] = low_in_pips
     df[toUse + "_High-body_bef"] = abs(high_in_pips) - abs(body_in_pips)
     df[toUse + "_Low-body_bef"] = abs(low_in_pips) - abs(body_in_pips)
-    #df[toUse + "_High/Body_bef"] = abs(high_in_pips / body_in_pips)
-    #df[toUse + "_Low/body_bef"] = abs(low_in_pips / body_in_pips)
-    #df[toUse + "_Low/High_bef"] = abs(low_in_pips / high_in_pips)
+    # df[toUse + "_High/Body_bef"] = abs(high_in_pips / body_in_pips)
+    # df[toUse + "_Low/body_bef"] = abs(low_in_pips / body_in_pips)
+    # df[toUse + "_Low/High_bef"] = abs(low_in_pips / high_in_pips)
     df[toUse + "_High-Low_bef"] = abs(high_in_pips - low_in_pips)
 
     high_in_pips = ret[0][2]
@@ -122,7 +125,7 @@ def transform_columns_names(df, crossList, path, excluded):
     for col in df:
         if excluded not in col:
             df[col + "_" + toUse] = df[col]
-            #df[col + "_" + toUse] = df[col  + "_" + toUse].rolling(window=10).mean()
+            # df[col + "_" + toUse] = df[col  + "_" + toUse].rolling(window=10).mean()
             del df[col]
 
     df = add_candlestick_columns(df, toUse)
@@ -144,8 +147,8 @@ def create_dataframe(flist, excluded, crossList):
     for path in flist:
         df = pd.read_csv(str(path))
         del df['Adj Close']
-        #cols = list(df.columns.values)
-        #for i in cols:
+        # cols = list(df.columns.values)
+        # for i in cols:
         #    df[i] = pd.to_numeric(df[i], errors='ignore')
 
         # df = df.head(75).reset_index()
@@ -201,6 +204,10 @@ def apply_macd(df, slow, fast):
             df[col + "_macdline"] = macd_line
             df[col + "_signalline"] = signal_line
             df[col + "_macdhist"] = macd_hist
+            df[col + "_price-mean25"] = df[col].rolling(window=25).mean() - df[col]
+            df[col + "_price-mean50"] = df[col].rolling(window=50).mean() - df[col]
+            df[col + "_price_log"] = df[col].rolling(window=2).apply(lambda x: np.log(x[1] / x[0]))
+
     return df
 
 

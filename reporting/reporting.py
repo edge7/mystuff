@@ -13,15 +13,24 @@ import matplotlib.dates as mdates
 
 
 class CustomReport(object):
-    def __init__(self, pathToWrite, df, target_variable, train_len, pred):
+    def __init__(self, pathToWrite, df, target_variable, train_len, pred, pips, t):
         self.list_pips_cum = []
         self.path = pathToWrite
         self.df = df
         self.target_variable = target_variable
         self.total_pips = 0
         self.list_pips = []
+        self.list_pips_cum_s = {}
+        self.total_pips_s = {}
+        self.list_pips_s = {}
         self.train_len = train_len
         self.pred = pred
+        self.p = pips
+        self.t = t
+        self.legend_vot = False
+        self.legend_s = {}
+        self.list_colors = ['k', 'g', 'r', 'c', 'y', 'm']
+        self.dict_colors = {}
 
     def close(self):
         self.file_descriptor.close()
@@ -45,6 +54,19 @@ class CustomReport(object):
         self.file_descriptor.write("\nIt contains the following features: \n")
         self.file_descriptor.write("\n".join(self.df.columns.tolist()))
         self.file_descriptor.write("\n\n\n Printing scores/best parameters for models\n")
+
+        x = self.t.tolist()
+        x = [dt.datetime.strptime(gm, '%Y-%m-%d').date() for gm in x]
+        # y = self.p
+        # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m.%d.%Y'))
+        # plt.gca().xaxis.set_major_locator(mdates.YearLocator())
+        # #
+        # plt.plot(x, y, color='r', linewidth=0.2, linestyle='-', label='price')
+        # plt.legend(loc='upper left')
+        # plt.ylabel('Gain (in pips)')
+        # plt.xlabel('Time')
+        # plt.gcf().autofmt_xdate()
+        # plt.savefig(self.file_path + " chart.png")
 
     def write_feature_importance(self, model):
         self.file_descriptor.write("\n\n **** Writing out feature importance **** \n\n")
@@ -114,6 +136,8 @@ class CustomReport(object):
         self.file_descriptor.write("f1_test : \t")
         self.file_descriptor.write(str(f1))
         self.file_descriptor.write("\n --------------- \n")
+
+        self.write_prob_voting(model, X_test)
         return y_test_pred, model
 
     def write_result_in_pips(self, y_pred, gmt, target_in_pips):
@@ -126,11 +150,11 @@ class CustomReport(object):
             pips = target_in_pips[idx]
 
             if y > 0 and pips >= th or (y < 0 and pips < th):
-                self.total_pips += pips
+                self.total_pips += abs(pips)
                 self.list_pips.append((gm, abs(pips)))
                 self.list_pips_cum.append((gm, self.total_pips))
             else:
-                self.total_pips -= pips
+                self.total_pips -= abs(pips)
                 self.list_pips.append((gm, - abs(pips)))
                 self.list_pips_cum.append((gm, self.total_pips))
 
@@ -142,7 +166,6 @@ class CustomReport(object):
         self.file_descriptor.write("Model: " + str(model))
         self.file_descriptor.write("\n Pred: " + str(preds))
         self.file_descriptor.write("\n Prob: " + str(model.predict_proba(X)))
-
 
     def write_score(self, model, X_train, y_train, X_test, y_test):
 
@@ -208,7 +231,10 @@ class CustomReport(object):
         plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m.%d.%Y'))
         plt.gca().xaxis.set_major_locator(mdates.YearLocator())
 
-        plt.plot(x, y)
+        plt.plot(x, y, 'b', linewidth=0.5, label='vot')
+        if self.legend_vot == False:
+            plt.legend(loc='upper left')
+            self.legend_vot = True
         plt.ylabel('Gain (in pips)')
         plt.xlabel('Time')
         plt.gcf().autofmt_xdate()
@@ -218,3 +244,51 @@ class CustomReport(object):
         probs = voting_classifier._collect_probas(X)
         self.file_descriptor.write("\n\n\n Writing Prob. voting classifier: \n")
         self.file_descriptor.write(str(probs))
+
+    def write_result_in_pips_single_model(self, y_pred, gmt, target_in_pips, model):
+        th = THRESHOLD
+        for idx, val in enumerate(y_pred):
+            y = val
+            gm = gmt[idx]
+            gm = gm.split(" ")[0]
+            gm = dt.datetime.strptime(gm, '%Y-%m-%d').date()
+            pips = target_in_pips[idx]
+            total_pips = self.total_pips_s.get(str(model)[0:5], 0.0)
+            list_pips = self.list_pips_s.get(str(model)[0:5], [])
+            list_pips_cum = self.list_pips_cum_s.get(str(model)[0:5], [])
+            if y > 0 and pips >= th or (y < 0 and pips < th):
+                total_pips += abs(pips)
+                list_pips.append((gm, abs(pips)))
+                list_pips_cum.append((gm, total_pips))
+            else:
+                total_pips -= abs(pips)
+                list_pips.append((gm, - abs(pips)))
+                list_pips_cum.append((gm, total_pips))
+
+            k = str(model)[0:5]
+            self.total_pips_s[k] = total_pips
+            self.list_pips_s[k] = list_pips
+            self.list_pips_cum_s[k] = list_pips_cum
+
+        self.write_chart_single_model(k)
+
+    def write_chart_single_model(self, k):
+        color = self.dict_colors.get(k, None)
+        if color is None:
+            color = self.list_colors[0]
+            del self.list_colors[0]
+            self.dict_colors[k] = color
+
+        x = [item[0] for item in self.list_pips_cum_s[k]]
+        y = [item[1] for item in self.list_pips_cum_s[k]]
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m.%d.%Y'))
+        plt.gca().xaxis.set_major_locator(mdates.YearLocator())
+
+        plt.plot(x, y, color, linewidth=0.5, label=k)
+        if not self.legend_s.get(k, False):
+            # plt.legend(loc='upper left')
+            self.legend_s[k] = True
+        plt.ylabel('Gain (in pips)')
+        plt.xlabel('Time')
+        plt.gcf().autofmt_xdate()
+        # plt.savefig(self.file_path + " pict.png")

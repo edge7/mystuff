@@ -70,8 +70,10 @@ if __name__ == "__main__":
     df = df.replace([np.inf, -np.inf], np.nan)
     df = df.dropna(how='any')
     target_in_pips = df['target_in_pips']
+    t = df['target']
     gmt = df['Gmt time']
     df = drop_column([df], "Gmt time")[0]
+    #df = drop_column([df], "diff")[0]
     df = drop_column([df], 'target_in_pips')[0]
     # df = modify_time([df])[0]
     # df = df[df.target != 0]
@@ -79,7 +81,7 @@ if __name__ == "__main__":
     # plt.show()
 
     # Preparing reporting object
-    report = CustomReport(args.datapath, df, TARGET_VARIABLE, args.train_len, args.predict)
+    report = CustomReport(args.datapath, df, TARGET_VARIABLE, args.train_len, args.predict, target_in_pips.cumsum(), gmt)
     report.init()
     # Splitting
     # train_set, test_set = train_test_split(df, test_size=0.2, random_state=42)
@@ -92,7 +94,7 @@ if __name__ == "__main__":
     while start + train_len + test_len <= total_length:
 
         train_set = df.iloc[start: start + train_len]
-        test_set = df.iloc[start + train_len + 1: start + train_len + 1 + test_len]
+        test_set = df.iloc[start + train_len: start + train_len + test_len]
         train_set = train_set.reset_index(drop=True)
         test_set = test_set.reset_index(drop=True)
         report.write_step(start, train_len, test_len)
@@ -126,7 +128,7 @@ if __name__ == "__main__":
         param_grid_log_reg = {'C': 2.0 ** np.arange(-3, 9)}
         gdLog = GridSearchCustomModel(LogisticRegression(penalty='l2', max_iter=200), param_grid_log_reg)
 
-        param_grid_rf = {'n_estimators': [15, 30, 50, 100, 120], 'max_depth': [3, 5, 7, 12, 15]
+        param_grid_rf = {'n_estimators': [15, 30, 50, 100, 120], 'max_depth': [4, 5, 7, 12, 15]
                          }
         gdRf = GridSearchCustomModel(RandomForestClassifier(n_jobs=-1, random_state=42), param_grid_rf)
 
@@ -136,27 +138,36 @@ if __name__ == "__main__":
         ]
         gdSVM = GridSearchCustomModel(SVC(probability=True, random_state=42), param_grid_svm)
 
-        param_grid_GB = {'learning_rate': [0.1, 0.2, 0.5], 'n_estimators': [50, 100, 120], 'max_depth': [3, 5, 7, 10]
+        param_grid_GB = {'learning_rate': [0.1, 0.2, 0.5], 'n_estimators': [10, 20, 50, 100], 'max_depth': [3, 5, 7, 10, 15]
                          }
 
         gdGB = GridSearchCustomModel(GradientBoostingClassifier(random_state=42, max_features='auto'), param_grid_GB)
 
         param_grid_ANN = {"hidden_layer_sizes": [(20,20), (15,), (8, 3), (5, 5), (10, 10), (40, 40), (10, 5),
-                                                 (15, 13), (5, 10)],
+                                                 (15, 13), (5, 10), (5,5,5), (10,10,10)],
                           'activation': ['tanh', 'relu'],
                           'alpha': 10.0 ** -np.arange(1, 7)}
 
         gdANN = GridSearchCustomModel(MLPClassifier(solver='lbfgs', random_state=42, verbose=False, max_iter=12000), param_grid_ANN)
 
-        best_models = do_grid_search([gdLog, gdRf, gdSVM, gdANN], X_train, y_train.values.ravel())
+        best_models = do_grid_search([gdLog, gdANN, gdRf, gdSVM, gdGB], X_train, y_train.values.ravel())
 
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)
+            res = model.predict(X_test)
+            report.write_result_in_pips_single_model(res.tolist(),
+                                        gmt[start + train_len: start + train_len + test_len].tolist(),
+                                        target_in_pips[start + train_len: start + train_len + test_len].tolist(), model.best_estimator_)
 
+        report.write_result_in_pips_single_model([1] * test_len,
+                                                 gmt[start + train_len: start + train_len + test_len].tolist(),
+                                                 target_in_pips[
+                                                 start + train_len: start + train_len + test_len].tolist(),
+                                                 'real_price')
         y_test_pred, voting_classifier = report.write_combined_results(best_models, X_train, y_train, X_test, y_test)
         report.write_result_in_pips(y_test_pred.tolist(),
-                                    gmt[start + train_len + 1: start + train_len + 1 + test_len].tolist(),
-                                    target_in_pips[start + train_len + 1: start + train_len + 1 + test_len].tolist())
+                                    gmt[start + train_len: start + train_len + test_len].tolist(),
+                                    target_in_pips[start + train_len: start + train_len + test_len].tolist())
         start += test_len
 
     if args.predict == 'yes':
