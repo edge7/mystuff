@@ -31,6 +31,7 @@ class CustomReport(object):
         self.legend_s = {}
         self.list_colors = ['k', 'g', 'r', 'c', 'y', 'm']
         self.dict_colors = {}
+        self.feature_importance = {}
 
     def close(self):
         self.file_descriptor.close()
@@ -77,6 +78,10 @@ class CustomReport(object):
         sorted_by_importance = sorted(new_list, key=lambda tup: tup[0], reverse=True)
         to_write = ["Feature: " + str(elem[1]) + "  " + str(elem[0]) for elem in sorted_by_importance]
         self.file_descriptor.write("\n".join(to_write))
+        for importance, name in sorted_by_importance:
+            res = self.feature_importance.get(name, [])
+            res.append(float(importance))
+            self.feature_importance[name] = res
 
     def write_combined_results(self, models, X_train, y_train, X_test, y_test):
         m = [(str(model.best_estimator_), model.best_estimator_) for model in models]
@@ -292,3 +297,19 @@ class CustomReport(object):
         plt.xlabel('Time')
         plt.gcf().autofmt_xdate()
         # plt.savefig(self.file_path + " pict.png")
+
+    def consolidate_feature_importance(self):
+        l = []
+        for name, lis in self.feature_importance.items():
+            tot = float(sum(lis))
+            count = float(len(lis))
+            mean = tot / count
+            l.append((name, mean))
+
+        tw = sorted(l, key=lambda tup: tup[1], reverse=True)
+        to_write = ''
+        for t in tw:
+            to_write += str(t[0]) + ':   ' + str(t[1])
+            to_write += '\n'
+        self.file_descriptor.write('\n\n\n\n\n\n\n\n Writing Feature IMPORTANCE:\n\n')
+        self.file_descriptor.write(to_write)

@@ -1,6 +1,5 @@
 import argparse
 import pathlib
-
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
@@ -150,7 +149,7 @@ if __name__ == "__main__":
 
         gdANN = GridSearchCustomModel(MLPClassifier(solver='lbfgs', random_state=42, verbose=False, max_iter=12000), param_grid_ANN)
 
-        best_models = do_grid_search([gdANN, gdLog, gdRf], X_train, y_train.values.ravel())
+        best_models = do_grid_search([ gdRf], X_train, y_train.values.ravel())
 
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)
@@ -183,5 +182,6 @@ if __name__ == "__main__":
             report.write_predictions_next(model, X, gmt)
         report.write_prob_voting(voting_classifier, X)
 
+    report.consolidate_feature_importance()
     report.close()
     print('end')
