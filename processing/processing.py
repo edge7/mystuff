@@ -206,6 +206,7 @@ def apply_macd(df, slow, fast):
             df[col + "_macdhist"] = macd_hist
             df[col + "_price-mean25"] = df[col].rolling(window=25).mean() - df[col]
             df[col + "_price-mean50"] = df[col].rolling(window=50).mean() - df[col]
+            df[col + "_price-mean100"] = df[col].rolling(window=100).mean() - df[col]
             df[col + "_price_log"] = df[col].rolling(window=2).apply(lambda x: np.log(x[1] / x[0]))
 
     return df

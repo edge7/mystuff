@@ -89,7 +89,7 @@ if __name__ == "__main__":
     start = 0
     train_len = int(args.train_len)
 
-    test_len = 3
+    test_len = 1
 
     while start + train_len + test_len <= total_length:
 
@@ -126,7 +126,7 @@ if __name__ == "__main__":
         # Starting training
 
         param_grid_log_reg = {'C': 2.0 ** np.arange(-3, 9)}
-        gdLog = GridSearchCustomModel(LogisticRegression(penalty='l2', max_iter=200), param_grid_log_reg)
+        gdLog = GridSearchCustomModel(LogisticRegression(penalty='l2', max_iter=2000, random_state=42), param_grid_log_reg)
 
         param_grid_rf = {'n_estimators': [15, 30, 50, 100, 120], 'max_depth': [4, 5, 7, 12, 15]
                          }
@@ -138,7 +138,7 @@ if __name__ == "__main__":
         ]
         gdSVM = GridSearchCustomModel(SVC(probability=True, random_state=42), param_grid_svm)
 
-        param_grid_GB = {'learning_rate': [0.1, 0.2, 0.5], 'n_estimators': [10, 20, 50, 100], 'max_depth': [3, 5, 7, 10, 15]
+        param_grid_GB = {'learning_rate': [0.1, 0.2, 0.5, 0.05], 'n_estimators': [10, 20, 50, 100], 'max_depth': [3, 5, 7, 10, 15]
                          }
 
         gdGB = GridSearchCustomModel(GradientBoostingClassifier(random_state=42, max_features='auto'), param_grid_GB)
@@ -150,7 +150,7 @@ if __name__ == "__main__":
 
         gdANN = GridSearchCustomModel(MLPClassifier(solver='lbfgs', random_state=42, verbose=False, max_iter=12000), param_grid_ANN)
 
-        best_models = do_grid_search([gdLog, gdANN, gdRf, gdSVM, gdGB], X_train, y_train.values.ravel())
+        best_models = do_grid_search([gdANN, gdLog, gdRf], X_train, y_train.values.ravel())
 
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)

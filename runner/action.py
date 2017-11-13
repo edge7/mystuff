@@ -2,9 +2,12 @@ import os
 import pathlib
 import subprocess
 
-# input_dir = "/home/toniotonia47/Desktop/stockML/data/"
-input_dir = "/home/edge7/Desktop/MLApplied/Forex/Data/Stock/"
-best_lens = {input_dir + "Saipem": [520, 570], input_dir + "FCA": [520, 570]}
+input_dir = "/home/toniotonia47/Desktop/stockML/data/"
+# input_dir = "/home/edge7/Desktop/MLApplied/Forex/Data/Stock/"
+best_lens = {input_dir + "GeneraliMilano": [30]
+
+
+             }
 
 if __name__ == "__main__":
 
@@ -18,13 +21,12 @@ if __name__ == "__main__":
         else:
             for train_len in train_lens:
                 print("Running: " + str(stock_dir) + " con train_len: " + str(train_len))
-                # command = "python3.6 /home/toniotonia47/PycharmProjects/mystuff/ingestion/main.py --datapath "
-                command = "python3.5 /home/edge7/PycharmProjects/MlStock/ingestion/main.py --datapath "
+                command = "python3.6 /home/toniotonia47/PycharmProjects/mystuff/ingestion/main.py --datapath "
+                # command = "python3.5 /home/edge7/PycharmProjects/MlStock/ingestion/main.py --datapath "
                 command += str(stock_dir)
                 target = str(stock_dir).split("/")[-1]
                 command += " --target " + target
                 command += " --train_len " + str(train_len)
                 command += " --predict yes"
-                command += " --action yes"
                 with open(os.devnull, 'w') as devnull:
                     subprocess.run(command, check=True, shell=True, stdout=devnull, stderr=devnull)
