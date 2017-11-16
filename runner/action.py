@@ -4,7 +4,7 @@ import subprocess
 
 input_dir = "/home/toniotonia47/Desktop/stockML/data/"
 # input_dir = "/home/edge7/Desktop/MLApplied/Forex/Data/Stock/"
-best_lens = {input_dir + "GeneraliMilano": [30]
+best_lens = {input_dir + "CADJPY": [400]
 
 
              }

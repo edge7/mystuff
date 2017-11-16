@@ -6,7 +6,7 @@ import subprocess
 if __name__ == "__main__":
     input_dir = "/home/toniotonia47/Desktop/stockML/data/"
     flist = [p for p in pathlib.Path(input_dir).iterdir() if p.is_dir()]
-    train_len_list = reversed(range(20, 550, 50))
+    train_len_list = reversed(range(400))
     for train_len in train_len_list:
         for stock_dir in flist:
             print("Running: " + str(stock_dir) + " con train_len: " + str(train_len))

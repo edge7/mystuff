@@ -2,6 +2,8 @@ import pandas as pd
 from numpy import nan
 import numpy as np
 
+from algos.algos import adf
+
 THRESHOLD = 0
 
 
@@ -142,17 +144,25 @@ def drop_original_values(df, cross_list):
     return df
 
 
+def apply_df_test(df, target):
+    df[target + 'adf_50'] = df[target].rolling(window=50).apply(lambda x: adf(x))
+    df[target + 'adf_100'] = df[target].rolling(window=100).apply(lambda x: adf(x))
+    df[target + 'adf_25'] = df[target].rolling(window=25).apply(lambda x: adf(x))
+    return df
+
 def create_dataframe(flist, excluded, crossList):
     l = list()
     for path in flist:
         df = pd.read_csv(str(path))
-        del df['Adj Close']
+        if 'Adj Close' in df:
+            del df['Adj Close']
         # cols = list(df.columns.values)
         # for i in cols:
         #    df[i] = pd.to_numeric(df[i], errors='ignore')
-
+        df['Gmt time'] = df['Gmt time'].apply(lambda x: x.replace(",", " "))
         # df = df.head(75).reset_index()
-        df = df[df["Volume"] != 0.000].reset_index()
+        if 'Volume' in df:
+            df = df[df["Volume"] != 0.000].reset_index()
         df = transform_columns_names(df, crossList, path, excluded)
         l.append(df)
     return l
@@ -188,7 +198,7 @@ def drop_column(dfs, column):
 
 def apply_diff(df, excluded):
     for col in df:
-        if excluded in col:
+        if any( ext in col for ext in excluded):
             continue
         df[col + "_diff"] = df[col].diff()
     return df
@@ -207,8 +217,15 @@ def apply_macd(df, slow, fast):
             df[col + "_price-mean25"] = df[col].rolling(window=25).mean() - df[col]
             df[col + "_price-mean50"] = df[col].rolling(window=50).mean() - df[col]
             df[col + "_price-mean100"] = df[col].rolling(window=100).mean() - df[col]
-            df[col + "_price_log"] = df[col].rolling(window=2).apply(lambda x: np.log(x[1] / x[0]))
+            # df[col + "_price_log"] = df[col].rolling(window=2).apply(lambda x: np.log(x[1] / x[0]))
 
+    return df
+
+
+def create_month_column(df):
+    col = df['Gmt time']
+    month = col.apply(lambda x: int(x.split('-')[0]))
+    df['month'] = month
     return df
 
 

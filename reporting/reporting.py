@@ -57,7 +57,11 @@ class CustomReport(object):
         self.file_descriptor.write("\n\n\n Printing scores/best parameters for models\n")
 
         x = self.t.tolist()
-        x = [dt.datetime.strptime(gm, '%Y-%m-%d').date() for gm in x]
+        try:
+            x = [dt.datetime.strptime(gm, '%Y-%m-%d').date() for gm in x]
+        except Exception as e:
+            x = [dt.datetime.strptime(gm, '%m- %d %Y').date() for gm in x]
+
         # y = self.p
         # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m.%d.%Y'))
         # plt.gca().xaxis.set_major_locator(mdates.YearLocator())
@@ -150,8 +154,12 @@ class CustomReport(object):
         for idx, val in enumerate(y_pred):
             y = val
             gm = gmt[idx]
-            gm = gm.split(" ")[0]
-            gm = dt.datetime.strptime(gm, '%Y-%m-%d').date()
+            try:
+                tt = gm.split(" ")[0]
+                gm = dt.datetime.strptime(tt, '%Y-%m-%d').date()
+            except Exception as e:
+                gm = dt.datetime.strptime(gm, '%m- %d %Y').date()
+
             pips = target_in_pips[idx]
 
             if y > 0 and pips >= th or (y < 0 and pips < th):
@@ -255,8 +263,11 @@ class CustomReport(object):
         for idx, val in enumerate(y_pred):
             y = val
             gm = gmt[idx]
-            gm = gm.split(" ")[0]
-            gm = dt.datetime.strptime(gm, '%Y-%m-%d').date()
+            try:
+                tt = gm.split(" ")[0]
+                gm = dt.datetime.strptime(tt, '%Y-%m-%d').date()
+            except Exception as e:
+                gm = dt.datetime.strptime(gm, '%m- %d %Y').date()
             pips = target_in_pips[idx]
             total_pips = self.total_pips_s.get(str(model)[0:5], 0.0)
             list_pips = self.list_pips_s.get(str(model)[0:5], [])
