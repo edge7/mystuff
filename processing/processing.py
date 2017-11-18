@@ -150,6 +150,7 @@ def apply_df_test(df, target):
     df[target + 'adf_25'] = df[target].rolling(window=25).apply(lambda x: adf(x))
     return df
 
+
 def create_dataframe(flist, excluded, crossList):
     l = list()
     for path in flist:
@@ -166,6 +167,16 @@ def create_dataframe(flist, excluded, crossList):
         df = transform_columns_names(df, crossList, path, excluded)
         l.append(df)
     return l
+
+
+def apply_distance_from_max(df, target, window=50):
+    df['dist_from_max_' + str(window)] = df[target].rolling(window=window).apply(lambda x: np.max(x))
+    return df
+
+
+def apply_distance_from_min(df, target, window=50):
+    df['dist_from_min_' + str(window)] = df[target].rolling(window=window).apply(lambda x: np.min(x))
+    return df
 
 
 def modify_time(list_dataframes):
@@ -198,7 +209,7 @@ def drop_column(dfs, column):
 
 def apply_diff(df, excluded):
     for col in df:
-        if any( ext in col for ext in excluded):
+        if any(ext in col for ext in excluded):
             continue
         df[col + "_diff"] = df[col].diff()
     return df

@@ -9,7 +9,7 @@ from sklearn.svm import SVC
 
 from gridSearch.gridSearch import GridSearchCustomModel
 from processing.processing import create_dataframe, drop_column, join_dfs, apply_diff, create_y, drop_original_values, \
-    apply_macd, create_month_column, apply_df_test
+    apply_macd, create_month_column, apply_df_test, apply_distance_from_max, apply_distance_from_min
 from reporting.reporting import CustomReport
 from utility.utility import get_len_dfs
 from fitmodel.fitmodel import do_grid_search
@@ -18,6 +18,9 @@ TARGET_VARIABLE = "Close__diff"
 crossList = []
 
 # Stock version 
+
+
+
 if __name__ == "__main__":
 
     # Getting path where CSVs are stored
@@ -49,6 +52,15 @@ if __name__ == "__main__":
     df = apply_df_test(df, "Close_" + args.target)
     # Applying MAC
     df = apply_macd(df, 26, 12)
+
+    df = apply_distance_from_max(df, "Close_" + args.target, window = 50)
+    df = apply_distance_from_max(df, "Close_" + args.target, window=100)
+    df = apply_distance_from_max(df, "Close_" + args.target, window=10)
+
+    df = apply_distance_from_min(df, "Close_" + args.target, window = 50)
+    df = apply_distance_from_min(df, "Close_" + args.target, window = 100)
+    df = apply_distance_from_min(df, "Close_" + args.target, window = 10)
+
 
     # Apply diff to the column except for Gmt time
     df = apply_diff(df, ["Gmt time", "mean", "adf_"])
