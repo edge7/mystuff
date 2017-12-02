@@ -96,8 +96,7 @@ if __name__ == "__main__":
     report = CustomReport(args.datapath, df, TARGET_VARIABLE, args.train_len, args.predict, target_in_pips.cumsum(),
                           gmt)
     report.init()
-    # Splitting
-    # train_set, test_set = train_test_split(df, test_size=0.2, random_state=42)
+
     total_length = df.shape[0]
     start = 0
     train_len = int(args.train_len)
@@ -111,13 +110,11 @@ if __name__ == "__main__":
         train_set = train_set.reset_index(drop=True)
         test_set = test_set.reset_index(drop=True)
         report.write_step(start, train_len, test_len)
-        # poly_features = PolynomialFeatures(degree=1, include_bias=False)
 
         X_train = train_set.ix[:, train_set.columns != 'target']
         y_train = train_set.ix[:, train_set.columns == 'target']
-        # X_train = poly_features.fit_transform(X_train)
+
         X_test = test_set.ix[:, test_set.columns != 'target']
-        # X_test = poly_features.fit_transform(X_test)
         y_test = test_set.ix[:, test_set.columns == 'target']
 
         # Scaling X
