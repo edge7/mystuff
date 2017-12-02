@@ -170,12 +170,12 @@ def create_dataframe(flist, excluded, crossList):
 
 
 def apply_distance_from_max(df, target, window=50):
-    df['dist_from_max_' + str(window)] = df[target].rolling(window=window).apply(lambda x: np.max(x))
+    df['dist_from_max_' + str(window)] = df[target] - df[target].rolling(window=window).apply(lambda x: np.max(x))
     return df
 
 
 def apply_distance_from_min(df, target, window=50):
-    df['dist_from_min_' + str(window)] = df[target].rolling(window=window).apply(lambda x: np.min(x))
+    df['dist_from_min_' + str(window)] = df[target] - df[target].rolling(window=window).apply(lambda x: np.min(x))
     return df
 
 
@@ -218,7 +218,7 @@ def apply_diff(df, excluded):
 def apply_macd(df, slow, fast):
     applyTo = "Close"
     for col in df:
-        if applyTo in col:
+        if applyTo in col and 'adf' not in col:
             macd_line = df[col].rolling(window=fast).mean() - df[col].rolling(window=slow).mean()
             signal_line = macd_line.rolling(window=9).mean()
             macd_hist = macd_line - signal_line

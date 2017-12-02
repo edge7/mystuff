@@ -53,19 +53,18 @@ if __name__ == "__main__":
     # Applying MAC
     df = apply_macd(df, 26, 12)
 
-    df = apply_distance_from_max(df, "Close_" + args.target, window = 50)
-    df = apply_distance_from_max(df, "Close_" + args.target, window=100)
+    df = apply_distance_from_max(df, "Close_" + args.target, window=25)
+    df = apply_distance_from_max(df, "Close_" + args.target, window=15)
     df = apply_distance_from_max(df, "Close_" + args.target, window=10)
 
-    df = apply_distance_from_min(df, "Close_" + args.target, window = 50)
-    df = apply_distance_from_min(df, "Close_" + args.target, window = 100)
-    df = apply_distance_from_min(df, "Close_" + args.target, window = 10)
-
+    df = apply_distance_from_min(df, "Close_" + args.target, window=25)
+    df = apply_distance_from_min(df, "Close_" + args.target, window=15)
+    df = apply_distance_from_min(df, "Close_" + args.target, window=10)
 
     # Apply diff to the column except for Gmt time
-    df = apply_diff(df, ["Gmt time", "mean", "adf_"])
+    df = apply_diff(df, ["Gmt time", "adf_", "dist_from_"])
 
-    #df = create_month_column(df)
+    # df = create_month_column(df)
     # Close_xdiff is the difference between Close_i - Close_i-1
     df['target'] = df.apply(lambda row: create_y(row, TARGET_VARIABLE), axis=1)
 
@@ -139,7 +138,7 @@ if __name__ == "__main__":
 
         # Starting training
 
-        param_grid_log_reg = {'C': 2.0 ** np.arange(-3, 9)}
+        param_grid_log_reg = {'C': 2.0 ** np.arange(-4, 10)}
         gdLog = GridSearchCustomModel(LogisticRegression(penalty='l2', max_iter=2000, random_state=42),
                                       param_grid_log_reg)
 
@@ -167,7 +166,7 @@ if __name__ == "__main__":
         gdANN = GridSearchCustomModel(MLPClassifier(solver='lbfgs', random_state=42, verbose=False, max_iter=12000),
                                       param_grid_ANN)
 
-        best_models = do_grid_search([gdRf, gdLog, gdANN, gdGB], X_train, y_train.values.ravel())
+        best_models = do_grid_search([gdANN, gdRf, gdLog], X_train, y_train.values.ravel())
 
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)
