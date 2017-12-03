@@ -1,3 +1,5 @@
+import random
+
 import pandas as pd
 from numpy import nan
 import numpy as np
@@ -238,6 +240,17 @@ def create_month_column(df):
     month = col.apply(lambda x: int(x.split('-')[0]))
     df['month'] = month
     return df
+
+
+def my_round(x):
+    if x < 0.5:
+        -1
+    else:
+        1
+
+
+def get_random_list(length):
+    return [my_round(random.random()) for _ in range(0, length, 1)]
 
 
 def apply_mvavg(df, excluded, window):

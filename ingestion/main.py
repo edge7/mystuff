@@ -9,7 +9,7 @@ from sklearn.svm import SVC
 
 from gridSearch.gridSearch import GridSearchCustomModel
 from processing.processing import create_dataframe, drop_column, join_dfs, apply_diff, create_y, drop_original_values, \
-    apply_macd, create_month_column, apply_df_test, apply_distance_from_max, apply_distance_from_min
+    apply_macd, create_month_column, apply_df_test, apply_distance_from_max, apply_distance_from_min, get_random_list
 from reporting.reporting import CustomReport
 from utility.utility import get_len_dfs
 from fitmodel.fitmodel import do_grid_search
@@ -18,6 +18,9 @@ TARGET_VARIABLE = "Close__diff"
 crossList = []
 
 # Stock version 
+
+
+
 
 
 
@@ -165,6 +168,7 @@ if __name__ == "__main__":
 
         best_models = do_grid_search([gdANN, gdRf, gdLog], X_train, y_train.values.ravel())
 
+
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)
             res = model.predict(X_test)
@@ -173,6 +177,12 @@ if __name__ == "__main__":
                                                      target_in_pips[
                                                      start + train_len: start + train_len + test_len].tolist(),
                                                      model.best_estimator_)
+
+        report.write_result_in_pips_single_model(get_random_list(len(res.tolist)),
+                                                 gmt[start + train_len: start + train_len + test_len].tolist(),
+                                                 target_in_pips[
+                                                 start + train_len: start + train_len + test_len].tolist(),
+                                                 "COIN")
 
         report.write_result_in_pips_single_model([1] * test_len,
                                                  gmt[start + train_len: start + train_len + test_len].tolist(),
