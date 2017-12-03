@@ -244,13 +244,25 @@ def create_month_column(df):
 
 def my_round(x):
     if x < 0.5:
-        -1
+        return -1
     else:
-        1
+        return 1
+
+
+def apply_bollinger_band(df, column, window=25):
+    df['bollinger_band_up_' + str(window)] = \
+        (df[column].rolling(window=window).mean() + 2.0 * df[column].rolling(window=window).std()) - df[column]
+
+    df['bollinger_band_down_' + str(window)] = df[column] - (
+    df[column].rolling(window=window).mean() - 2.0 * df[column].rolling(
+        window=window).std())
+
+    return df
 
 
 def get_random_list(length):
-    return [my_round(random.random()) for _ in range(0, length, 1)]
+    l = [my_round(random.random()) for _ in range(0, length, 1)]
+    return l
 
 
 def apply_mvavg(df, excluded, window):

@@ -9,7 +9,8 @@ from sklearn.svm import SVC
 
 from gridSearch.gridSearch import GridSearchCustomModel
 from processing.processing import create_dataframe, drop_column, join_dfs, apply_diff, create_y, drop_original_values, \
-    apply_macd, create_month_column, apply_df_test, apply_distance_from_max, apply_distance_from_min, get_random_list
+    apply_macd, create_month_column, apply_df_test, apply_distance_from_max, apply_distance_from_min, get_random_list, \
+    apply_bollinger_band
 from reporting.reporting import CustomReport
 from utility.utility import get_len_dfs
 from fitmodel.fitmodel import do_grid_search
@@ -53,8 +54,12 @@ if __name__ == "__main__":
     # check_len_is_same(dfs_len, len(df.index))
 
     df = apply_df_test(df, "Close_" + args.target)
+
     # Applying MAC
     df = apply_macd(df, 26, 12)
+
+    df = apply_bollinger_band(df, "Close_" + args.target, window=25)
+    df = apply_bollinger_band(df, "Close_" + args.target, window=50)
 
     df = apply_distance_from_max(df, "Close_" + args.target, window=25)
     df = apply_distance_from_max(df, "Close_" + args.target, window=15)
@@ -65,7 +70,7 @@ if __name__ == "__main__":
     df = apply_distance_from_min(df, "Close_" + args.target, window=10)
 
     # Apply diff to the column except for Gmt time
-    df = apply_diff(df, ["Gmt time", "adf_", "dist_from_"])
+    df = apply_diff(df, ["Gmt time", "adf_", "dist_from_", "bollinger_band"])
 
     # df = create_month_column(df)
     # Close_xdiff is the difference between Close_i - Close_i-1
@@ -90,10 +95,6 @@ if __name__ == "__main__":
     df = drop_column([df], "Gmt time")[0]
     # df = drop_column([df], "diff")[0]
     df = drop_column([df], 'target_in_pips')[0]
-    # df = modify_time([df])[0]
-    # df = df[df.target != 0]
-    # plt.hist(df["target"].values.ravel())
-    # plt.show()
 
     # Preparing reporting object
     report = CustomReport(args.datapath, df, TARGET_VARIABLE, args.train_len, args.predict, target_in_pips.cumsum(),
@@ -166,8 +167,7 @@ if __name__ == "__main__":
         gdANN = GridSearchCustomModel(MLPClassifier(solver='lbfgs', random_state=42, verbose=False, max_iter=12000),
                                       param_grid_ANN)
 
-        best_models = do_grid_search([gdANN, gdRf, gdLog], X_train, y_train.values.ravel())
-
+        best_models = do_grid_search([gdLog], X_train, y_train.values.ravel())
 
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)

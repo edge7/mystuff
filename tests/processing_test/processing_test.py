@@ -1,9 +1,9 @@
 import os
-
+import statistics
 import pathlib
 
 from ingestion.main import TARGET_VARIABLE
-from processing.processing import create_dataframe, apply_diff, create_y
+from processing.processing import create_dataframe, apply_diff, create_y, apply_bollinger_band
 
 TESTDATA_FILENAME = os.path.join(os.path.dirname(__file__), 'testdata')
 
@@ -103,3 +103,18 @@ def test_apply_diff():
     df['target'] = df['target'].shift(-1)
 
     print('end')
+
+
+def test_bb():
+    crossList = ["test_create"]
+    flist = [p for p in pathlib.Path(TESTDATA_FILENAME).iterdir() if p.is_file()]
+    # Creating n dataframe where n is the number of files
+    dfs = create_dataframe(flist, "Gmt time", crossList)
+    df = dfs[0]
+    df = apply_bollinger_band(df, "Close_" + crossList[0], window=2)
+    std = statistics.stdev([1000.1, 100])
+    mean = statistics.mean([1000.1, 100])
+    up = mean + 2.0*std - 1000.1
+    down = 1000.1 - (mean - 2.0*std)
+    assert get_value_row(df.tail(1), 'bollinger_band_up_2') == up
+    assert get_value_row(df.tail(1), 'bollinger_band_down_2') == down
