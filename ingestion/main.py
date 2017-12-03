@@ -178,7 +178,7 @@ if __name__ == "__main__":
                                                      start + train_len: start + train_len + test_len].tolist(),
                                                      model.best_estimator_)
 
-        report.write_result_in_pips_single_model(get_random_list(len(res.tolist)),
+        report.write_result_in_pips_single_model(get_random_list(test_len),
                                                  gmt[start + train_len: start + train_len + test_len].tolist(),
                                                  target_in_pips[
                                                  start + train_len: start + train_len + test_len].tolist(),
