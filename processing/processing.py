@@ -176,6 +176,15 @@ def apply_distance_from_max(df, target, window=50):
     return df
 
 
+def momentum(x):
+    return 100.0 * x[-1] / x[0]
+
+
+def apply_momentum(df, target, window=8):
+    df['momentum_' + str(window)] = df[target].rolling(window=window).apply(lambda x: momentum(x))
+    return df
+
+
 def apply_distance_from_min(df, target, window=50):
     df['dist_from_min_' + str(window)] = df[target] - df[target].rolling(window=window).apply(lambda x: np.min(x))
     return df
@@ -254,8 +263,8 @@ def apply_bollinger_band(df, column, window=25):
         (df[column].rolling(window=window).mean() + 2.0 * df[column].rolling(window=window).std()) - df[column]
 
     df['bollinger_band_down_' + str(window)] = df[column] - (
-    df[column].rolling(window=window).mean() - 2.0 * df[column].rolling(
-        window=window).std())
+        df[column].rolling(window=window).mean() - 2.0 * df[column].rolling(
+            window=window).std())
 
     return df
 

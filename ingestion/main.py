@@ -10,7 +10,7 @@ from sklearn.svm import SVC
 from gridSearch.gridSearch import GridSearchCustomModel
 from processing.processing import create_dataframe, drop_column, join_dfs, apply_diff, create_y, drop_original_values, \
     apply_macd, create_month_column, apply_df_test, apply_distance_from_max, apply_distance_from_min, get_random_list, \
-    apply_bollinger_band
+    apply_bollinger_band, apply_momentum
 from reporting.reporting import CustomReport
 from utility.utility import get_len_dfs
 from fitmodel.fitmodel import do_grid_search
@@ -35,7 +35,8 @@ if __name__ == "__main__":
     parser.add_argument("--predict", help="predict next output")
 
     args = parser.parse_args()
-    TARGET_VARIABLE = "Close_" + args.target + "_diff"
+    TARGET_VARIABLE = args.target + "_Body_in_pips"
+
     flist = [p for p in pathlib.Path(args.datapath).iterdir() if p.is_file()]
     crossList.append(args.target)
     # Creating n dataframe where n is the number of files
@@ -60,15 +61,15 @@ if __name__ == "__main__":
 
     df = apply_bollinger_band(df, "Close_" + args.target, window=25)
     df = apply_bollinger_band(df, "Close_" + args.target, window=50)
+    df = apply_bollinger_band(df, "Close_" + args.target, window=10)
 
-    df = apply_distance_from_max(df, "Close_" + args.target, window=25)
-    df = apply_distance_from_max(df, "Close_" + args.target, window=15)
-    df = apply_distance_from_max(df, "Close_" + args.target, window=10)
+    df = apply_distance_from_max(df, "Close_" + args.target, window=8)
+    # df = apply_distance_from_max(df, "Close_" + args.target, window=10)
 
-    df = apply_distance_from_min(df, "Close_" + args.target, window=25)
-    df = apply_distance_from_min(df, "Close_" + args.target, window=15)
-    df = apply_distance_from_min(df, "Close_" + args.target, window=10)
+    df = apply_distance_from_min(df, "Close_" + args.target, window=8)
+    # df = apply_distance_from_min(df, "Close_" + args.target, window=10)
 
+    df = apply_momentum(df, "Close_" + args.target, window=8)
     # Apply diff to the column except for Gmt time
     df = apply_diff(df, ["Gmt time", "adf_", "dist_from_", "bollinger_band"])
 
@@ -139,8 +140,8 @@ if __name__ == "__main__":
 
         # Starting training
 
-        param_grid_log_reg = {'C': 2.0 ** np.arange(-4, 10)}
-        gdLog = GridSearchCustomModel(LogisticRegression(penalty='l2', max_iter=2000, random_state=42),
+        param_grid_log_reg = {'C': 2.0 ** np.arange(-5, 11)}
+        gdLog = GridSearchCustomModel(LogisticRegression(penalty='l1', max_iter=2000, random_state=42),
                                       param_grid_log_reg)
 
         param_grid_rf = {'n_estimators': [15, 30, 50, 100, 120], 'max_depth': [4, 5, 7, 12, 15]
