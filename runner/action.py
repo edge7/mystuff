@@ -1,10 +1,10 @@
 import os
-import pathlib #e.durso@live.com
+import pathlib  # e.durso@live.com
 import subprocess
 
 input_dir = "/home/toniotonia47/Desktop/stockML/data/"
 # input_dir = "/home/edge7/Desktop/MLApplied/Forex/Data/Stock/"
-best_lens = {input_dir + "CADJPY": [ 100],
+best_lens = {input_dir + "AUDCAD": [400],
              }
 
 if __name__ == "__main__":

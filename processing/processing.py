@@ -149,7 +149,7 @@ def drop_original_values(df, cross_list):
 def apply_df_test(df, target):
     df[target + 'adf_50'] = df[target].rolling(window=50).apply(lambda x: adf(x))
     df[target + 'adf_100'] = df[target].rolling(window=100).apply(lambda x: adf(x))
-    df[target + 'adf_25'] = df[target].rolling(window=25).apply(lambda x: adf(x))
+    #df[target + 'adf_25'] = df[target].rolling(window=25).apply(lambda x: adf(x))
     return df
 
 
@@ -217,6 +217,12 @@ def drop_column(dfs, column):
                 del i[col]
     return dfs
 
+def drop_columns(df, columns):
+    for col in df:
+        for c in columns:
+            if c == col:
+                del df[c]
+    return df
 
 def apply_diff(df, excluded):
     for col in df:

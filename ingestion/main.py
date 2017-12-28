@@ -10,20 +10,13 @@ from sklearn.svm import SVC
 from gridSearch.gridSearch import GridSearchCustomModel
 from processing.processing import create_dataframe, drop_column, join_dfs, apply_diff, create_y, drop_original_values, \
     apply_macd, create_month_column, apply_df_test, apply_distance_from_max, apply_distance_from_min, get_random_list, \
-    apply_bollinger_band, apply_momentum
+    apply_bollinger_band, apply_momentum, drop_columns
 from reporting.reporting import CustomReport
 from utility.utility import get_len_dfs
 from fitmodel.fitmodel import do_grid_search
 
 TARGET_VARIABLE = "Close__diff"
 crossList = []
-
-# Stock version 
-
-
-
-
-
 
 if __name__ == "__main__":
 
@@ -62,11 +55,12 @@ if __name__ == "__main__":
     df = apply_bollinger_band(df, "Close_" + args.target, window=25)
     df = apply_bollinger_band(df, "Close_" + args.target, window=50)
     df = apply_bollinger_band(df, "Close_" + args.target, window=10)
+    df = apply_bollinger_band(df, "Close_" + args.target, window=100)
 
-    df = apply_distance_from_max(df, "Close_" + args.target, window=8)
+    # df = apply_distance_from_max(df, "Close_" + args.target, window=8)
     # df = apply_distance_from_max(df, "Close_" + args.target, window=10)
 
-    df = apply_distance_from_min(df, "Close_" + args.target, window=8)
+    # df = apply_distance_from_min(df, "Close_" + args.target, window=8)
     # df = apply_distance_from_min(df, "Close_" + args.target, window=10)
 
     df = apply_momentum(df, "Close_" + args.target, window=8)
@@ -83,6 +77,7 @@ if __name__ == "__main__":
     df['target_in_pips'] = df[TARGET_VARIABLE].shift(-1)
     # df = drop_column([df], "diff")[0]
     df = drop_original_values(df, crossList)
+    #df = drop_columns(df, ['Close_CADJPY_macdline', 'Close_CADJPY_signalline', 'Close_CADJPY_macdhist'])
     # Apply percentage excluding the diff calculated above, gtm time and target column
     # df = apply_percentage(df, ["diff", "Gmt time", "target", "pips"]).ix[1:][:-1]
     # df = apply_mvavg(df, ["target", "_macdhist", "_signalline", "_macdline"], 5)
@@ -140,7 +135,7 @@ if __name__ == "__main__":
 
         # Starting training
 
-        param_grid_log_reg = {'C': 2.0 ** np.arange(-5, 11)}
+        param_grid_log_reg = {'C': 2.0 ** np.arange(-4, 8)}
         gdLog = GridSearchCustomModel(LogisticRegression(penalty='l1', max_iter=2000, random_state=42),
                                       param_grid_log_reg)
 
@@ -149,8 +144,9 @@ if __name__ == "__main__":
         gdRf = GridSearchCustomModel(RandomForestClassifier(n_jobs=-1, random_state=42), param_grid_rf)
 
         param_grid_svm = [
-            {'C': 10.0 ** np.arange(-2, 3), 'kernel': ['linear']},
-            {'C': 10.0 ** np.arange(-3, 4), 'gamma': 8.5 ** np.arange(-3, 3), 'kernel': ['rbf']},
+            {'C': 10.0 ** np.arange(-3, 4), 'kernel': ['linear']}
+            #{'C': 10.0 ** np.arange(-3, 4), 'gamma': 8.5 ** np.arange(-3, 3), 'kernel': ['rbf']
+             #}
         ]
         gdSVM = GridSearchCustomModel(SVC(probability=True, random_state=42), param_grid_svm)
 
