@@ -6,7 +6,7 @@ from sklearn.ensemble import VotingClassifier
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
 
 from Ensemble.ensemble import EnsembleClassifier
-from processing.processing import THRESHOLD
+from processing.processing import THRESHOLD, AHEAD
 import datetime as dt
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -14,6 +14,8 @@ import matplotlib.dates as mdates
 
 class CustomReport(object):
     def __init__(self, pathToWrite, df, target_variable, train_len, pred, pips, t, equity):
+        self.how_many_behind = {}
+        self.last_prediction = {}
         self.list_pips_cum = []
         self.path = pathToWrite
         self.df = df
@@ -63,16 +65,16 @@ class CustomReport(object):
         except Exception as e:
             x = [dt.datetime.strptime(gm, '%m-%d-%Y').date() for gm in x]
 
-        # y = self.p
-        # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m.%d.%Y'))
-        # plt.gca().xaxis.set_major_locator(mdates.YearLocator())
-        # #
-        # plt.plot(x, y, color='r', linewidth=0.2, linestyle='-', label='price')
-        # plt.legend(loc='upper left')
-        # plt.ylabel('Gain (in pips)')
-        # plt.xlabel('Time')
-        # plt.gcf().autofmt_xdate()
-        # plt.savefig(self.file_path + " chart.png")
+            # y = self.p
+            # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m.%d.%Y'))
+            # plt.gca().xaxis.set_major_locator(mdates.YearLocator())
+            # #
+            # plt.plot(x, y, color='r', linewidth=0.2, linestyle='-', label='price')
+            # plt.legend(loc='upper left')
+            # plt.ylabel('Gain (in pips)')
+            # plt.xlabel('Time')
+            # plt.gcf().autofmt_xdate()
+            # plt.savefig(self.file_path + " chart.png")
 
     def write_feature_importance(self, model):
         self.file_descriptor.write("\n\n **** Writing out feature importance **** \n\n")
@@ -104,9 +106,9 @@ class CustomReport(object):
         y_train_pred = model.predict(X_train)
         conf_train = confusion_matrix(y_train.values.ravel(), y_train_pred)
         acc_train = accuracy_score(y_train.values.ravel(), y_train_pred)
-        ps_train = precision_score(y_train.values.ravel(), y_train_pred)
-        rec_train = recall_score(y_train.values.ravel(), y_train_pred)
-        f1_train = f1_score(y_train.values.ravel(), y_train_pred)
+        ps_train = precision_score(y_train.values.ravel(), y_train_pred, average="weighted")
+        rec_train = recall_score(y_train.values.ravel(), y_train_pred, average="weighted")
+        f1_train = f1_score(y_train.values.ravel(), y_train_pred, average="weighted")
 
         self.file_descriptor.write("\nconf train: \n")
         self.file_descriptor.write(str(conf_train))
@@ -127,9 +129,9 @@ class CustomReport(object):
 
         conf = confusion_matrix(y_test, y_test_pred)
         acc = accuracy_score(y_test, y_test_pred)
-        ps = precision_score(y_test, y_test_pred)
-        rec = recall_score(y_test, y_test_pred)
-        f1 = f1_score(y_test, y_test_pred)
+        ps = precision_score(y_test, y_test_pred, average="weighted")
+        rec = recall_score(y_test, y_test_pred, average="weighted")
+        f1 = f1_score(y_test, y_test_pred, average="weighted")
         self.file_descriptor.write("\n --------------- \n")
         self.file_descriptor.write("conf test: \n")
         self.file_descriptor.write(str(conf))
@@ -163,7 +165,7 @@ class CustomReport(object):
 
             pips = target_in_pips[idx]
 
-            if y > 0 and pips >= th or (y < 0 and pips < th):
+            if y == "BUY" and pips >= th or (y == "SELL" and pips < th):
                 self.total_pips += abs(pips)
                 self.list_pips.append((gm, abs(pips)))
                 self.list_pips_cum.append((gm, self.total_pips))
@@ -196,9 +198,9 @@ class CustomReport(object):
         y_train_pred = model.predict(X_train)
         conf_train = confusion_matrix(y_train.values.ravel(), y_train_pred)
         acc_train = accuracy_score(y_train.values.ravel(), y_train_pred)
-        ps_train = precision_score(y_train.values.ravel(), y_train_pred)
-        rec_train = recall_score(y_train.values.ravel(), y_train_pred)
-        f1_train = f1_score(y_train.values.ravel(), y_train_pred)
+        ps_train = precision_score(y_train.values.ravel(), y_train_pred, average="weighted")
+        rec_train = recall_score(y_train.values.ravel(), y_train_pred, average="weighted")
+        f1_train = f1_score(y_train.values.ravel(), y_train_pred, average="weighted")
 
         self.file_descriptor.write("\nconf train: \n")
         self.file_descriptor.write(str(conf_train))
@@ -219,9 +221,9 @@ class CustomReport(object):
 
         conf = confusion_matrix(y_test, y_test_pred)
         acc = accuracy_score(y_test, y_test_pred)
-        ps = precision_score(y_test, y_test_pred)
-        rec = recall_score(y_test, y_test_pred)
-        f1 = f1_score(y_test, y_test_pred)
+        ps = precision_score(y_test, y_test_pred,  average="weighted")
+        rec = recall_score(y_test, y_test_pred,  average="weighted")
+        f1 = f1_score(y_test, y_test_pred,  average="weighted")
         self.file_descriptor.write("\n --------------- \n")
         self.file_descriptor.write("conf test: \n")
         self.file_descriptor.write(str(conf))
@@ -273,11 +275,27 @@ class CustomReport(object):
             total_pips = self.total_pips_s.get(str(model)[0:5], 0.0)
             list_pips = self.list_pips_s.get(str(model)[0:5], [])
             list_pips_cum = self.list_pips_cum_s.get(str(model)[0:5], [])
+            last_prediction = self.last_prediction.get(str(model)[0:5], 0.0)
+            how_many_behind = self.how_many_behind.get(str(model)[0:5], 0)
 
-            #OutOfMarket?
-            if y != 0.0:
+            how_many_behind -= 1
 
-                if y > 0 and pips >= th or (y < 0 and pips < th):
+            # If timeout has expired use old prediction
+            if how_many_behind <= 0:
+                self.last_prediction[str(model)[0:5]] = y
+                self.how_many_behind[str(model)[0:5]] = AHEAD
+                self.file_descriptor.write('\n\n\n Prediction for: ' + str(model)[0:5] +
+                                           ' has expired')
+            else:
+                self.how_many_behind[str(model)[0:5]] = how_many_behind
+                y = last_prediction
+                self.file_descriptor.write('\n\n\n Prediction for: ' + str(model)[0:5] +
+                                           ' has not expired, still  ' + str(how_many_behind) + ' times')
+
+            # OutOfMarket?
+            if y != "OUT":
+
+                if y == "BUY" and pips >= th or (y == "SELL" and pips < th):
                     total_pips += abs(pips)
                     list_pips.append((gm, abs(pips)))
                     list_pips_cum.append((gm, total_pips))

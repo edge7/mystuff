@@ -7,7 +7,7 @@ import numpy as np
 from algos.algos import adf
 
 THRESHOLD = 0
-
+AHEAD = 5
 
 def apply_candle(row, toUse):
     close = row["Close_" + toUse]
@@ -259,6 +259,30 @@ def apply_ichimo(df, t):
     return df
 
 
+def create_target_ahead(df, CLOSE_VARIABLE, AHEAD, threshold):
+    number_rows = df.shape[0]
+    # Iterating row by row, check change after AHEAD candles
+    for index in range(number_rows):
+        start = df.iloc[[index]][CLOSE_VARIABLE][index]
+        to_set = 0
+        to_set_ = "OUT"
+        end = min(number_rows, index + AHEAD +1)
+        for next in range(index+1, end):
+            value = df.iloc[[next]][CLOSE_VARIABLE][next]
+            pctg = (value / start - 1 ) * 100.0
+            if pctg > threshold:
+                to_set += 1
+            if pctg < - threshold:
+                to_set -=1
+        if to_set > 0:
+            to_set_ = "BUY"
+        if to_set < 0:
+            to_set_ = "SELL"
+
+        df.set_value(index, 'target', to_set_)
+
+    return df
+
 def apply_stochastic(df, t):
     for col in df:
         if 'High_' + t == col:
@@ -322,12 +346,14 @@ def apply_bollinger_band(df, column, window=25):
 
 def apply_diff_on(df, l):
     for i in l:
-        df[i + "_diff"] = df[i].diff()
+        if i in df:
+            df[i + "_diff"] = df[i].diff()
     return df
 
 
 def get_random_list(length):
     l = [my_round(random.random()) for _ in range(0, length, 1)]
+    l = [ "BUY" if x == 1  else "SELL" for x in l ]
     return l
 
 

@@ -10,12 +10,14 @@ from sklearn.svm import SVC
 from gridSearch.gridSearch import GridSearchCustomModel
 from processing.processing import create_dataframe, drop_column, join_dfs, apply_diff, create_y, drop_original_values, \
     apply_macd, create_month_column, apply_df_test, apply_distance_from_max, apply_distance_from_min, get_random_list, \
-    apply_bollinger_band, apply_momentum, drop_columns, apply_mvavg, apply_ichimo, apply_stochastic, apply_diff_on
+    apply_bollinger_band, apply_momentum, drop_columns, apply_mvavg, apply_ichimo, apply_stochastic, apply_diff_on, \
+    create_target_ahead, AHEAD
 from reporting.reporting import CustomReport
 from utility.utility import get_len_dfs
 from fitmodel.fitmodel import do_grid_search, modify_res_in_according_to
 
 TARGET_VARIABLE = "Close__diff"
+PERCENTAGE_CHANGE = 1.0
 crossList = []
 
 if __name__ == "__main__":
@@ -42,8 +44,8 @@ if __name__ == "__main__":
 
     # Inner join on GMT time
     df = join_dfs(dfs, "Gmt time")
-    # if args.predict == 'yes':
-    #    df = df.tail(int(args.train_len)*2)
+
+
     # Check that len is the same (inner join validation)
     # check_len_is_same(dfs_len, len(df.index))
 
@@ -52,6 +54,7 @@ if __name__ == "__main__":
     df = apply_ichimo(df, args.target)
 
     df = apply_stochastic(df, args.target)
+
     # Applying MAC
     df = apply_macd(df, 26, 12)
 
@@ -77,11 +80,13 @@ if __name__ == "__main__":
 
     # df = create_month_column(df)
     # Close_xdiff is the difference between Close_i - Close_i-1
-    df['target'] = df.apply(lambda row: create_y(row, TARGET_VARIABLE), axis=1)
+    #df['target'] = df.apply(lambda row: create_y(row, TARGET_VARIABLE), axis=1)
+
+    df = create_target_ahead(df, "Close_" + args.target, AHEAD, PERCENTAGE_CHANGE)
 
     # We don't want to have target in the same row as Close_xdiff, we want to move it up (shifting)
     # When we will make predictions in realtime, we want to predict Close_xdiff starting from previous row
-    df['target'] = df['target'].shift(-1)
+    #df['target'] = df['target'].shift(-1)
     df['target_in_pips'] = df[TARGET_VARIABLE].shift(-1)
     # df = drop_column([df], "diff")[0]
     df = drop_original_values(df, crossList)
@@ -136,14 +141,14 @@ if __name__ == "__main__":
 
         # Need to remove 0 label
 
-        y_train_0 = y_train[y_train['target'] == 0].index.tolist()
-        y_test_0 = y_test[y_test['target'] == 0].index.tolist()
+        #y_train_0 = y_train[y_train['target'] == 0].index.tolist()
+        #y_test_0 = y_test[y_test['target'] == 0].index.tolist()
 
-        y_train = y_train[y_train["target"] != 0]
-        y_test = y_test[y_test["target"] != 0]
+        #y_train = y_train[y_train["target"] != 0]
+        #y_test = y_test[y_test["target"] != 0]
 
-        X_train = np.delete(X_train, y_train_0, axis=0)
-        X_test = np.delete(X_test, y_test_0, axis=0)
+        #X_train = np.delete(X_train, y_train_0, axis=0)
+        #X_test = np.delete(X_test, y_test_0, axis=0)
 
         # Starting training
 
@@ -194,11 +199,12 @@ if __name__ == "__main__":
                                                  start + train_len: start + train_len + test_len].tolist(),
                                                  "COIN")
 
-        report.write_result_in_pips_single_model([1] * test_len,
+        report.write_result_in_pips_single_model(["BUY"] * test_len,
                                                  gmt[start + train_len: start + train_len + test_len].tolist(),
                                                  target_in_pips[
                                                  start + train_len: start + train_len + test_len].tolist(),
                                                  'real_price')
+
         y_test_pred, voting_classifier = report.write_combined_results(best_models, X_train, y_train, X_test, y_test)
         report.write_result_in_pips(y_test_pred.tolist(),
                                     gmt[start + train_len: start + train_len + test_len].tolist(),
