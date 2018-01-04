@@ -21,7 +21,7 @@ def do_grid_search(list_models, X, y):
         print(model.model)
         print("  ...  \n")
         start = time()
-        clf = GridSearchCV(model.model, model.params, cv=7, n_jobs=-1, verbose=1, scoring='f1')
+        clf = GridSearchCV(model.model, model.params, cv=5, n_jobs=-1, verbose=1, scoring='f1')
         clf.fit(X, y)
         end = time()
         elapsed = (end - start) / 60.0
@@ -32,4 +32,18 @@ def do_grid_search(list_models, X, y):
         print(clf.best_score_)
         to_return.append(clf)
 
+    return to_return
+
+
+def modify_res_in_according_to(res, model):
+    tmp = res.tolist()
+    best_score = model.best_score_
+    to_return = []
+    for i in tmp:
+        if best_score > 0.52:
+            to_return.append(i)
+        elif best_score < 0.48:
+            to_return.append((i * -1.0))
+        else:
+            to_return.append(0.0)
     return to_return

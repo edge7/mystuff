@@ -10,10 +10,10 @@ from sklearn.svm import SVC
 from gridSearch.gridSearch import GridSearchCustomModel
 from processing.processing import create_dataframe, drop_column, join_dfs, apply_diff, create_y, drop_original_values, \
     apply_macd, create_month_column, apply_df_test, apply_distance_from_max, apply_distance_from_min, get_random_list, \
-    apply_bollinger_band, apply_momentum, drop_columns
+    apply_bollinger_band, apply_momentum, drop_columns, apply_mvavg, apply_ichimo, apply_stochastic, apply_diff_on
 from reporting.reporting import CustomReport
 from utility.utility import get_len_dfs
-from fitmodel.fitmodel import do_grid_search
+from fitmodel.fitmodel import do_grid_search, modify_res_in_according_to
 
 TARGET_VARIABLE = "Close__diff"
 crossList = []
@@ -47,15 +47,22 @@ if __name__ == "__main__":
     # Check that len is the same (inner join validation)
     # check_len_is_same(dfs_len, len(df.index))
 
-    df = apply_df_test(df, "Close_" + args.target)
+    #df = apply_df_test(df, "Close_" + args.target)
 
+    df = apply_ichimo(df, args.target)
+
+    df = apply_stochastic(df, args.target)
     # Applying MAC
     df = apply_macd(df, 26, 12)
 
-    df = apply_bollinger_band(df, "Close_" + args.target, window=25)
     df = apply_bollinger_band(df, "Close_" + args.target, window=50)
-    df = apply_bollinger_band(df, "Close_" + args.target, window=10)
-    df = apply_bollinger_band(df, "Close_" + args.target, window=100)
+
+    df = apply_diff_on(df, ["Volume_" + args.target])
+
+
+    # df = apply_bollinger_band(df, "Close_" + args.target, window=15)
+    # df = apply_bollinger_band(df, "Close_" + args.target, window=10)
+    # df = apply_bollinger_band(df, "Close_" + args.target, window=100)
 
     # df = apply_distance_from_max(df, "Close_" + args.target, window=8)
     # df = apply_distance_from_max(df, "Close_" + args.target, window=10)
@@ -63,9 +70,10 @@ if __name__ == "__main__":
     # df = apply_distance_from_min(df, "Close_" + args.target, window=8)
     # df = apply_distance_from_min(df, "Close_" + args.target, window=10)
 
-    df = apply_momentum(df, "Close_" + args.target, window=8)
+    # df = apply_momentum(df, "Close_" + args.target, window=5)
+    # df = apply_momentum(df, "Close_" + args.target, window=3)
     # Apply diff to the column except for Gmt time
-    df = apply_diff(df, ["Gmt time", "adf_", "dist_from_", "bollinger_band"])
+    #df = apply_diff(df, ["Gmt time", "adf_", "dist_from_", "bollinger_band"])
 
     # df = create_month_column(df)
     # Close_xdiff is the difference between Close_i - Close_i-1
@@ -77,11 +85,15 @@ if __name__ == "__main__":
     df['target_in_pips'] = df[TARGET_VARIABLE].shift(-1)
     # df = drop_column([df], "diff")[0]
     df = drop_original_values(df, crossList)
-    #df = drop_columns(df, ['Close_CADJPY_macdline', 'Close_CADJPY_signalline', 'Close_CADJPY_macdhist'])
+    # df = drop_columns(df, ['Close_CADJPY_macdline', 'Close_CADJPY_signalline', 'Close_CADJPY_macdhist'])
     # Apply percentage excluding the diff calculated above, gtm time and target column
     # df = apply_percentage(df, ["diff", "Gmt time", "target", "pips"]).ix[1:][:-1]
     # df = apply_mvavg(df, ["target", "_macdhist", "_signalline", "_macdline"], 5)
-    # df = apply_mvavg(df, ["target", "_mv_avg", "_macdhist", "_signalline", "_macdline"], 10)
+    #df = apply_mvavg(df, ["target", "_mv_avg", "_macdhist", "_signalline", "_macdline"], 10)
+    # Drop diff pips
+    df = drop_columns(df, ["Close_" + args.target + "_diff", "Open_" + args.target + "_diff",
+                           "Low_" + args.target + "_diff",
+                           "High_" + args.target + "_diff"])
     df_prediction = df.copy()
     df = df.replace([np.inf, -np.inf], np.nan)
     df = df.dropna(how='any')
@@ -94,7 +106,7 @@ if __name__ == "__main__":
 
     # Preparing reporting object
     report = CustomReport(args.datapath, df, TARGET_VARIABLE, args.train_len, args.predict, target_in_pips.cumsum(),
-                          gmt)
+                          gmt, args.target)
     report.init()
 
     total_length = df.shape[0]
@@ -145,8 +157,8 @@ if __name__ == "__main__":
 
         param_grid_svm = [
             {'C': 10.0 ** np.arange(-3, 4), 'kernel': ['linear']}
-            #{'C': 10.0 ** np.arange(-3, 4), 'gamma': 8.5 ** np.arange(-3, 3), 'kernel': ['rbf']
-             #}
+            # {'C': 10.0 ** np.arange(-3, 4), 'gamma': 8.5 ** np.arange(-3, 3), 'kernel': ['rbf']
+            # }
         ]
         gdSVM = GridSearchCustomModel(SVC(probability=True, random_state=42), param_grid_svm)
 
@@ -164,11 +176,12 @@ if __name__ == "__main__":
         gdANN = GridSearchCustomModel(MLPClassifier(solver='lbfgs', random_state=42, verbose=False, max_iter=12000),
                                       param_grid_ANN)
 
-        best_models = do_grid_search([gdLog], X_train, y_train.values.ravel())
+        best_models = do_grid_search([gdLog, gdRf], X_train, y_train.values.ravel())
 
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)
             res = model.predict(X_test)
+            # res = modify_res_in_according_to(res, model)
             report.write_result_in_pips_single_model(res.tolist(),
                                                      gmt[start + train_len: start + train_len + test_len].tolist(),
                                                      target_in_pips[

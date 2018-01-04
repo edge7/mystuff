@@ -14,6 +14,7 @@ def apply_candle(row, toUse):
     high = row["High_" + toUse]
     low = row["Low_" + toUse]
     open = row["Open_" + toUse]
+
     # It is green?
     if close - open >= 0:
         high_in_pips = high - close
@@ -91,21 +92,21 @@ def add_candlestick_columns(df, toUse):
     # df[toUse + "_High/Body"] = abs(high_in_pips / body_in_pips)
     # df[toUse + "_Low/body"] = abs(low_in_pips / body_in_pips)
     # df[toUse + "_Low/High"] = abs(low_in_pips / high_in_pips)
-    df[toUse + "_High-Low"] = abs(high_in_pips - low_in_pips)
-    df[toUse + "_High-body"] = abs(high_in_pips) - abs(body_in_pips)
-    df[toUse + "_Low-body"] = abs(low_in_pips) - abs(body_in_pips)
+    # df[toUse + "_High-Low"] = abs(high_in_pips - low_in_pips)
+    # df[toUse + "_High-body"] = abs(high_in_pips) - abs(body_in_pips)
+    # df[toUse + "_Low-body"] = abs(low_in_pips) - abs(body_in_pips)
     high_in_pips = ret[0][1]
     body_in_pips = ret[1][1]
     low_in_pips = ret[2][1]
     df[toUse + "_High_in_pips_bef"] = high_in_pips
     df[toUse + "_Body_in_pips_bef"] = body_in_pips
     df[toUse + "_Low_in_pips_bef"] = low_in_pips
-    df[toUse + "_High-body_bef"] = abs(high_in_pips) - abs(body_in_pips)
-    df[toUse + "_Low-body_bef"] = abs(low_in_pips) - abs(body_in_pips)
+    # df[toUse + "_High-body_bef"] = abs(high_in_pips) - abs(body_in_pips)
+    # df[toUse + "_Low-body_bef"] = abs(low_in_pips) - abs(body_in_pips)
     # df[toUse + "_High/Body_bef"] = abs(high_in_pips / body_in_pips)
     # df[toUse + "_Low/body_bef"] = abs(low_in_pips / body_in_pips)
     # df[toUse + "_Low/High_bef"] = abs(low_in_pips / high_in_pips)
-    df[toUse + "_High-Low_bef"] = abs(high_in_pips - low_in_pips)
+    # df[toUse + "_High-Low_bef"] = abs(high_in_pips - low_in_pips)
 
     high_in_pips = ret[0][2]
     body_in_pips = ret[1][2]
@@ -120,7 +121,7 @@ def add_candlestick_columns(df, toUse):
     return df
 
 
-def transform_columns_names(df, crossList, path, excluded):
+def transform_columns_names(df, crossList, path, excluded, keep_names=False):
     toUse = crossList[0]
     for j in crossList:
         if j in str(path):
@@ -129,7 +130,7 @@ def transform_columns_names(df, crossList, path, excluded):
     for col in df:
         if excluded not in col:
             df[col + "_" + toUse] = df[col]
-            # df[col + "_" + toUse] = df[col  + "_" + toUse].rolling(window=10).mean()
+            # df[col + "_" + toUse] = df[col + "_" + toUse].rolling(window=10).mean()
             del df[col]
 
     df = add_candlestick_columns(df, toUse)
@@ -149,11 +150,11 @@ def drop_original_values(df, cross_list):
 def apply_df_test(df, target):
     df[target + 'adf_50'] = df[target].rolling(window=50).apply(lambda x: adf(x))
     df[target + 'adf_100'] = df[target].rolling(window=100).apply(lambda x: adf(x))
-    #df[target + 'adf_25'] = df[target].rolling(window=25).apply(lambda x: adf(x))
+    # df[target + 'adf_25'] = df[target].rolling(window=25).apply(lambda x: adf(x))
     return df
 
 
-def create_dataframe(flist, excluded, crossList):
+def create_dataframe(flist, excluded, crossList, keep_names=True):
     l = list()
     for path in flist:
         df = pd.read_csv(str(path))
@@ -166,7 +167,7 @@ def create_dataframe(flist, excluded, crossList):
         # df = df.head(75).reset_index()
         if 'Volume' in df:
             df = df[df["Volume"] != 0.000].reset_index()
-        df = transform_columns_names(df, crossList, path, excluded)
+        df = transform_columns_names(df, crossList, path, excluded, keep_names=keep_names)
         l.append(df)
     return l
 
@@ -217,6 +218,7 @@ def drop_column(dfs, column):
                 del i[col]
     return dfs
 
+
 def drop_columns(df, columns):
     for col in df:
         for c in columns:
@@ -224,11 +226,51 @@ def drop_columns(df, columns):
                 del df[c]
     return df
 
+
 def apply_diff(df, excluded):
     for col in df:
         if any(ext in col for ext in excluded):
             continue
         df[col + "_diff"] = df[col].diff()
+    return df
+
+
+def apply_ichimo(df, t):
+    # Kijun
+    # averaging the highest high and the lowest low for the past 26 periods
+    for col in df:
+        if 'High_' + t == col:
+            high26 = df[col].rolling(window=26).max()
+            high9 = df[col].rolling(window=9).max()
+
+        if 'Low_' + t == col:
+            low26 = df[col].rolling(window=26).min()
+            low9 = df[col].rolling(window=9).min()
+
+    kijun = (high26 + low26) / 2.0
+    tenkan = (high9 + low9) / 2.0
+
+    avg = (kijun + tenkan) / 2.0
+
+    # df["kijun"] = df["Close_" + t] - kijun
+    # df["tenkan"] = df["Close_" + t] - tenkan
+    # df["kijun_tenkan_avg"] = df["Close_" + t] - avg
+    df["kijun-tenkan"] = kijun - tenkan
+    return df
+
+
+def apply_stochastic(df, t):
+    for col in df:
+        if 'High_' + t == col:
+            high14 = df[col].rolling(window=14).max()
+        if 'Low_' + t == col:
+            low14 = df[col].rolling(window=14).min()
+
+    fast_stoc = 100.0 * (df["Close_" + t] - low14) / (high14 - low14)
+    slow_stoc = fast_stoc.rolling(window=3).mean()
+    df["fast_stoc"] = fast_stoc
+    df["slow_stoc"] = slow_stoc
+    df["fast-slow_stoc"] = fast_stoc - slow_stoc
     return df
 
 
@@ -240,11 +282,13 @@ def apply_macd(df, slow, fast):
             signal_line = macd_line.rolling(window=9).mean()
             macd_hist = macd_line - signal_line
             df[col + "_macdline"] = macd_line
-            df[col + "_signalline"] = signal_line
-            df[col + "_macdhist"] = macd_hist
-            df[col + "_price-mean25"] = df[col].rolling(window=25).mean() - df[col]
+            # df[col + "_signalline"] = signal_line
+            # df[col + "_macdhist"] = macd_hist
+            # df[col + "_price-mean25"] = df[col].rolling(window=25).mean() - df[col]
             df[col + "_price-mean50"] = df[col].rolling(window=50).mean() - df[col]
             df[col + "_price-mean100"] = df[col].rolling(window=100).mean() - df[col]
+
+            df["mean50-mean100"] = df[col + "_price-mean50"] - df[col + "_price-mean100"]
             # df[col + "_price_log"] = df[col].rolling(window=2).apply(lambda x: np.log(x[1] / x[0]))
 
     return df
@@ -272,6 +316,13 @@ def apply_bollinger_band(df, column, window=25):
         df[column].rolling(window=window).mean() - 2.0 * df[column].rolling(
             window=window).std())
 
+    # df['bollinger_band_diff_' + str(window)] = df['bollinger_band_up_' + str(window)] - df['bollinger_band_down_' + str(window)]
+    return df
+
+
+def apply_diff_on(df, l):
+    for i in l:
+        df[i + "_diff"] = df[i].diff()
     return df
 
 

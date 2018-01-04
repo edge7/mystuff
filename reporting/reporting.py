@@ -13,7 +13,7 @@ import matplotlib.dates as mdates
 
 
 class CustomReport(object):
-    def __init__(self, pathToWrite, df, target_variable, train_len, pred, pips, t):
+    def __init__(self, pathToWrite, df, target_variable, train_len, pred, pips, t, equity):
         self.list_pips_cum = []
         self.path = pathToWrite
         self.df = df
@@ -32,6 +32,7 @@ class CustomReport(object):
         self.list_colors = ['k', 'g', 'r', 'c', 'y', 'm']
         self.dict_colors = {}
         self.feature_importance = {}
+        self.equity = equity
 
     def close(self):
         self.file_descriptor.close()
@@ -251,7 +252,7 @@ class CustomReport(object):
         plt.ylabel('Gain (in pips)')
         plt.xlabel('Time')
         plt.gcf().autofmt_xdate()
-        plt.savefig(self.file_path + " pict.png")
+        plt.savefig(self.file_path + self.equity + ".png")
 
     def write_prob_voting(self, voting_classifier, X):
         probs = voting_classifier._collect_probas(X)
@@ -272,13 +273,20 @@ class CustomReport(object):
             total_pips = self.total_pips_s.get(str(model)[0:5], 0.0)
             list_pips = self.list_pips_s.get(str(model)[0:5], [])
             list_pips_cum = self.list_pips_cum_s.get(str(model)[0:5], [])
-            if y > 0 and pips >= th or (y < 0 and pips < th):
-                total_pips += abs(pips)
-                list_pips.append((gm, abs(pips)))
-                list_pips_cum.append((gm, total_pips))
+
+            #OutOfMarket?
+            if y != 0.0:
+
+                if y > 0 and pips >= th or (y < 0 and pips < th):
+                    total_pips += abs(pips)
+                    list_pips.append((gm, abs(pips)))
+                    list_pips_cum.append((gm, total_pips))
+                else:
+                    total_pips -= abs(pips)
+                    list_pips.append((gm, - abs(pips)))
+                    list_pips_cum.append((gm, total_pips))
             else:
-                total_pips -= abs(pips)
-                list_pips.append((gm, - abs(pips)))
+                list_pips.append((gm, 0.0))
                 list_pips_cum.append((gm, total_pips))
 
             k = str(model)[0:5]
