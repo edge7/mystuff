@@ -237,7 +237,7 @@ def apply_diff(df, excluded):
 
 def apply_ichimo(df, t):
     # Kijun
-    # averaging the highest high and the lowest low for the past 26 periods
+    # averaging the highest high and the lowest low for the past 26/9 periods
     for col in df:
         if 'High_' + t == col:
             high26 = df[col].rolling(window=26).max()
@@ -266,14 +266,14 @@ def create_target_ahead(df, CLOSE_VARIABLE, AHEAD, threshold):
         start = df.iloc[[index]][CLOSE_VARIABLE][index]
         to_set = 0
         to_set_ = "OUT"
-        end = min(number_rows, index + AHEAD +1)
-        for next in range(index+1, end):
+        end = min(number_rows, index + AHEAD + 1)
+        for next in range(index + 1, end):
             value = df.iloc[[next]][CLOSE_VARIABLE][next]
-            pctg = (value / start - 1 ) * 100.0
+            pctg = (value / start - 1) * 100.0
             if pctg > threshold:
                 to_set += 1
             if pctg < - threshold:
-                to_set -=1
+                to_set -= 1
         if to_set > 0:
             to_set_ = "BUY"
         if to_set < 0:

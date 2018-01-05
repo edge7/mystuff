@@ -14,6 +14,7 @@ import matplotlib.dates as mdates
 
 class CustomReport(object):
     def __init__(self, pathToWrite, df, target_variable, train_len, pred, pips, t, equity):
+        self.counter = {}
         self.how_many_behind = {}
         self.last_prediction = {}
         self.list_pips_cum = []
@@ -221,9 +222,9 @@ class CustomReport(object):
 
         conf = confusion_matrix(y_test, y_test_pred)
         acc = accuracy_score(y_test, y_test_pred)
-        ps = precision_score(y_test, y_test_pred,  average="weighted")
-        rec = recall_score(y_test, y_test_pred,  average="weighted")
-        f1 = f1_score(y_test, y_test_pred,  average="weighted")
+        ps = precision_score(y_test, y_test_pred, average="weighted")
+        rec = recall_score(y_test, y_test_pred, average="weighted")
+        f1 = f1_score(y_test, y_test_pred, average="weighted")
         self.file_descriptor.write("\n --------------- \n")
         self.file_descriptor.write("conf test: \n")
         self.file_descriptor.write(str(conf))
@@ -254,7 +255,9 @@ class CustomReport(object):
         plt.ylabel('Gain (in pips)')
         plt.xlabel('Time')
         plt.gcf().autofmt_xdate()
+        plt.legend(loc='upper left')
         plt.savefig(self.file_path + self.equity + ".png")
+        plt.close()
 
     def write_prob_voting(self, voting_classifier, X):
         probs = voting_classifier._collect_probas(X)
@@ -271,13 +274,16 @@ class CustomReport(object):
                 gm = dt.datetime.strptime(tt, '%Y-%m-%d').date()
             except Exception as e:
                 gm = dt.datetime.strptime(gm, '%m-%d-%Y').date()
+
             pips = target_in_pips[idx]
             total_pips = self.total_pips_s.get(str(model)[0:5], 0.0)
             list_pips = self.list_pips_s.get(str(model)[0:5], [])
             list_pips_cum = self.list_pips_cum_s.get(str(model)[0:5], [])
             last_prediction = self.last_prediction.get(str(model)[0:5], 0.0)
             how_many_behind = self.how_many_behind.get(str(model)[0:5], 0)
-
+            counter = self.counter.get(str(model)[0:5], 0.0)
+            counter +=1.0
+            self.counter[str(model)[0:5]] = counter
             how_many_behind -= 1
 
             # If timeout has expired use old prediction
@@ -307,14 +313,21 @@ class CustomReport(object):
                 list_pips.append((gm, 0.0))
                 list_pips_cum.append((gm, total_pips))
 
+            pips_a_time = total_pips / counter
             k = str(model)[0:5]
+
+            self.file_descriptor.write("\n\nStats per  " + k + ":\n")
+            self.file_descriptor.write("PIPS A TIME: " + str(pips_a_time) + "\n")
+            self.file_descriptor.write("TOTAL PIPS: " + str(total_pips) + "\n\n")
+
+
             self.total_pips_s[k] = total_pips
             self.list_pips_s[k] = list_pips
             self.list_pips_cum_s[k] = list_pips_cum
 
-        self.write_chart_single_model(k)
+        self.write_chart_single_model(k, label = " " + "{0:.3f}".format(total_pips))
 
-    def write_chart_single_model(self, k):
+    def write_chart_single_model(self, k, label = ""):
         color = self.dict_colors.get(k, None)
         if color is None:
             color = self.list_colors[0]
@@ -326,10 +339,11 @@ class CustomReport(object):
         plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m.%d.%Y'))
         plt.gca().xaxis.set_major_locator(mdates.YearLocator())
 
-        plt.plot(x, y, color, linewidth=0.5, label=k)
+        plt.plot(x, y, color, linewidth=0.5, label=k + label)
+
         if not self.legend_s.get(k, False):
-            # plt.legend(loc='upper left')
             self.legend_s[k] = True
+
         plt.ylabel('Gain (in pips)')
         plt.xlabel('Time')
         plt.gcf().autofmt_xdate()
