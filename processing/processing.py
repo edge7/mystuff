@@ -9,6 +9,7 @@ from algos.algos import adf
 THRESHOLD = 0
 AHEAD = 5
 
+
 def apply_candle(row, toUse):
     close = row["Close_" + toUse]
     high = row["High_" + toUse]
@@ -283,6 +284,7 @@ def create_target_ahead(df, CLOSE_VARIABLE, AHEAD, threshold):
 
     return df
 
+
 def apply_stochastic(df, t):
     for col in df:
         if 'High_' + t == col:
@@ -312,7 +314,7 @@ def apply_macd(df, slow, fast):
             df[col + "_price-mean50"] = df[col].rolling(window=50).mean() - df[col]
             df[col + "_price-mean100"] = df[col].rolling(window=100).mean() - df[col]
 
-            df["mean25-mean50"] = df[col + "_price-mean25"]  - df[col + "_price-mean50"]
+            df["mean25-mean50"] = df[col + "_price-mean25"] - df[col + "_price-mean50"]
             df["mean50-mean100"] = df[col + "_price-mean50"] - df[col + "_price-mean100"]
             # df[col + "_price_log"] = df[col].rolling(window=2).apply(lambda x: np.log(x[1] / x[0]))
 
@@ -354,7 +356,7 @@ def apply_diff_on(df, l):
 
 def get_random_list(length):
     l = [my_round(random.random()) for _ in range(0, length, 1)]
-    l = [ "BUY" if x == 1  else "SELL" for x in l ]
+    l = ["BUY" if x == 1  else "SELL" for x in l]
     return l
 
 

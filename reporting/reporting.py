@@ -255,9 +255,9 @@ class CustomReport(object):
         plt.ylabel('Gain (in pips)')
         plt.xlabel('Time')
         plt.gcf().autofmt_xdate()
-        plt.legend(loc='upper left')
+        #plt.legend(loc='upper left')
         plt.savefig(self.file_path + self.equity + ".png")
-        plt.close()
+        #plt.close()
 
     def write_prob_voting(self, voting_classifier, X):
         probs = voting_classifier._collect_probas(X)
@@ -325,7 +325,7 @@ class CustomReport(object):
             self.list_pips_s[k] = list_pips
             self.list_pips_cum_s[k] = list_pips_cum
 
-        self.write_chart_single_model(k, label = " " + "{0:.3f}".format(total_pips))
+        self.write_chart_single_model(k, label = " " + "{0:.2f}".format(total_pips))
 
     def write_chart_single_model(self, k, label = ""):
         color = self.dict_colors.get(k, None)
