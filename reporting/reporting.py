@@ -243,21 +243,25 @@ class CustomReport(object):
         self.file_descriptor.write("\n --------------- \n")
 
     def write_chart(self):
+
         x = [item[0] for item in self.list_pips_cum]
         y = [item[1] for item in self.list_pips_cum]
         plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m.%d.%Y'))
         plt.gca().xaxis.set_major_locator(mdates.YearLocator())
 
         plt.plot(x, y, 'b', linewidth=0.5, label='vot')
-        if self.legend_vot == False:
+
+        if not self.legend_vot:
             plt.legend(loc='upper left')
             self.legend_vot = True
+
         plt.ylabel('Gain (in pips)')
         plt.xlabel('Time')
         plt.gcf().autofmt_xdate()
-        #plt.legend(loc='upper left')
+        plt.legend(loc='upper left')
         plt.savefig(self.file_path + self.equity + ".png")
         #plt.close()
+        plt.clf()
 
     def write_prob_voting(self, voting_classifier, X):
         probs = voting_classifier._collect_probas(X)
@@ -332,7 +336,7 @@ class CustomReport(object):
             self.list_pips_s[k] = list_pips
             self.list_pips_cum_s[k] = list_pips_cum
 
-        self.write_chart_single_model(k, label = " " + "{0:.2f}".format(total_pips))
+        self.write_chart_single_model(k, label = " " + "{0:.2f}".format(pips_a_time))
 
     def write_chart_single_model(self, k, label = ""):
         color = self.dict_colors.get(k, None)
