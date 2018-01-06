@@ -10,13 +10,21 @@ def fit_models(list_models, X, y):
     return list_models
 
 
-def do_grid_search(list_models, X, y):
+def do_grid_search(list_models, X, y, report, old_best_models):
     to_return = []
     print("Shape X \n")
     print(X.shape)
     print("#Columns Y \n")
     print(y.shape)
+    c = -1
     for model in list_models:
+        c += 1
+        hasExpired = report.hasExpired(model)
+        if not hasExpired and old_best_models is not None:
+            to_return.append(old_best_models[c])
+            continue
+        report.file_descriptor.write("\n\n\n ***** NEW MODEL FOR MODEL " + str(model.model)[0:10] +
+                                     " is being generated ****\n\n\n")
         print("Grid Search running for model \n")
         print(model.model)
         print("  ...  \n")

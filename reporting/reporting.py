@@ -264,6 +264,13 @@ class CustomReport(object):
         self.file_descriptor.write("\n\n\n Writing Prob. voting classifier: \n")
         self.file_descriptor.write(str(probs))
 
+
+    def hasExpired(self, model):
+        res = self.how_many_behind.get(str(model.model)[0:5], 0)
+        if res == 1:
+            return True
+        return False
+
     def write_result_in_pips_single_model(self, y_pred, gmt, target_in_pips, model):
         th = THRESHOLD
         for idx, val in enumerate(y_pred):

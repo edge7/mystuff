@@ -1,5 +1,6 @@
 import argparse
 import pathlib
+
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
@@ -7,14 +8,14 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 
+from fitmodel.fitmodel import do_grid_search
 from gridSearch.gridSearch import GridSearchCustomModel
-from processing.processing import create_dataframe, drop_column, join_dfs, apply_diff, create_y, drop_original_values, \
-    apply_macd, create_month_column, apply_df_test, apply_distance_from_max, apply_distance_from_min, get_random_list, \
-    apply_bollinger_band, apply_momentum, drop_columns, apply_mvavg, apply_ichimo, apply_stochastic, apply_diff_on, \
+from processing.processing import create_dataframe, drop_column, join_dfs, drop_original_values, \
+    apply_macd, get_random_list, \
+    apply_bollinger_band, drop_columns, apply_ichimo, apply_stochastic, apply_diff_on, \
     create_target_ahead, AHEAD
 from reporting.reporting import CustomReport
 from utility.utility import get_len_dfs
-from fitmodel.fitmodel import do_grid_search, modify_res_in_according_to
 
 TARGET_VARIABLE = "Close__diff"
 PERCENTAGE_CHANGE = 1.0
@@ -120,6 +121,8 @@ if __name__ == "__main__":
 
     test_len = 1
 
+    old_best_models = None
+
     while start + train_len + test_len <= total_length:
 
         train_set = df.iloc[start: start + train_len]
@@ -181,7 +184,7 @@ if __name__ == "__main__":
         gdANN = GridSearchCustomModel(MLPClassifier(solver='lbfgs', random_state=42, verbose=False, max_iter=12000),
                                       param_grid_ANN)
 
-        best_models = do_grid_search([gdLog, gdRf, gdGB], X_train, y_train.values.ravel())
+        best_models = do_grid_search([gdLog, gdRf], X_train, y_train.values.ravel(), report, old_best_models)
 
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)
@@ -210,6 +213,8 @@ if __name__ == "__main__":
                                     gmt[start + train_len: start + train_len + test_len].tolist(),
                                     target_in_pips[start + train_len: start + train_len + test_len].tolist())
         start += test_len
+
+        old_best_models = best_models
 
     if args.predict == 'yes':
         to_predict = df_prediction.tail(1)
