@@ -312,14 +312,23 @@ class CustomReport(object):
             # OutOfMarket?
             if y != "OUT":
 
-                if y == "BUY" and pips >= th or (y == "SELL" and pips < th):
-                    total_pips += abs(pips)
-                    list_pips.append((gm, abs(pips)))
-                    list_pips_cum.append((gm, total_pips))
-                else:
-                    total_pips -= abs(pips)
-                    list_pips.append((gm, - abs(pips)))
-                    list_pips_cum.append((gm, total_pips))
+                # if y == "BUY" and pips >= th or (y == "SELL" and pips < th):
+                #     total_pips += abs(pips)
+                #     list_pips.append((gm, abs(pips)))
+                #     list_pips_cum.append((gm, total_pips))
+                # else:
+                #     total_pips -= abs(pips)
+                #     list_pips.append((gm, - abs(pips)))
+                #     list_pips_cum.append((gm, total_pips))
+                if y == "BUY":
+                    total_pips += pips
+                    list_pips.append((gm, pips))
+
+                if y == "SELL":
+                    total_pips -= pips
+                    list_pips.append((gm, -pips))
+
+                list_pips_cum.append((gm, total_pips))
             else:
                 list_pips.append((gm, 0.0))
                 list_pips_cum.append((gm, total_pips))
@@ -336,7 +345,7 @@ class CustomReport(object):
             self.list_pips_s[k] = list_pips
             self.list_pips_cum_s[k] = list_pips_cum
 
-        self.write_chart_single_model(k, label = " " + "{0:.2f}".format(pips_a_time))
+        self.write_chart_single_model(k, label = " " + "{0:.4f}".format(pips_a_time)+ "" + str(y))
 
     def write_chart_single_model(self, k, label = ""):
         color = self.dict_colors.get(k, None)

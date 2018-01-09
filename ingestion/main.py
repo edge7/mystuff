@@ -13,7 +13,7 @@ from gridSearch.gridSearch import GridSearchCustomModel
 from processing.processing import create_dataframe, drop_column, join_dfs, drop_original_values, \
     apply_macd, get_random_list, \
     apply_bollinger_band, drop_columns, apply_ichimo, apply_stochastic, apply_diff_on, \
-    create_target_ahead, AHEAD
+    create_target_ahead, AHEAD, apply_momentum
 from reporting.reporting import CustomReport
 from utility.utility import get_len_dfs
 
@@ -75,7 +75,7 @@ if __name__ == "__main__":
     # df = apply_distance_from_min(df, "Close_" + args.target, window=10)
 
     # df = apply_momentum(df, "Close_" + args.target, window=5)
-    # df = apply_momentum(df, "Close_" + args.target, window=3)
+    df = apply_momentum(df, "Close_" + args.target, window=5)
     # Apply diff to the column except for Gmt time
     #df = apply_diff(df, ["Gmt time", "adf_", "dist_from_", "bollinger_band"])
 
@@ -88,7 +88,8 @@ if __name__ == "__main__":
     # We don't want to have target in the same row as Close_xdiff, we want to move it up (shifting)
     # When we will make predictions in realtime, we want to predict Close_xdiff starting from previous row
     #df['target'] = df['target'].shift(-1)
-    df['target_in_pips'] = df[TARGET_VARIABLE].shift(-1)
+    #df['target_in_pips'] = df[TARGET_VARIABLE].shift(-1)
+    df['target_in_pips'] = df["Close_" + args.target].diff().shift(-1)
     # df = drop_column([df], "diff")[0]
     df = drop_original_values(df, crossList)
     # df = drop_columns(df, ['Close_CADJPY_macdline', 'Close_CADJPY_signalline', 'Close_CADJPY_macdhist'])
@@ -184,7 +185,7 @@ if __name__ == "__main__":
         gdANN = GridSearchCustomModel(MLPClassifier(solver='lbfgs', random_state=42, verbose=False, max_iter=12000),
                                       param_grid_ANN)
 
-        best_models = do_grid_search([gdLog, gdRf], X_train, y_train.values.ravel(), report, old_best_models)
+        best_models = do_grid_search([gdLog, gdRf, gdGB], X_train, y_train.values.ravel(), report, old_best_models)
 
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)
@@ -223,6 +224,7 @@ if __name__ == "__main__":
         gmt = to_predict['Gmt time']
         to_predict = drop_column([to_predict], 'Gmt time')[0]
         X = sc.transform(to_predict)
+        best_models = do_grid_search([gdLog, gdRf, gdGB], X_train, y_train.values.ravel(), report, old_best_models)
         best_models = [model.best_estimator_ for model in best_models]
         best_models.append(voting_classifier)
         for model in best_models:
