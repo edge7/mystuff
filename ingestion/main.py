@@ -3,6 +3,7 @@ import pathlib
 
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import VotingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
@@ -185,7 +186,7 @@ if __name__ == "__main__":
         gdANN = GridSearchCustomModel(MLPClassifier(solver='lbfgs', random_state=42, verbose=False, max_iter=12000),
                                       param_grid_ANN)
 
-        best_models = do_grid_search([gdLog, gdRf, gdGB], X_train, y_train.values.ravel(), report, old_best_models)
+        best_models = do_grid_search([gdLog], X_train, y_train.values.ravel(), report, old_best_models)
 
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)
@@ -218,14 +219,28 @@ if __name__ == "__main__":
         old_best_models = best_models
 
     if args.predict == 'yes':
+        report.file_descriptor.write("\n\n\n *** FINAL PREDICTION ***")
+        train_set = df.iloc[start: start + train_len]
+        train_set = train_set.reset_index(drop=True)
+        X_train = train_set.ix[:, train_set.columns != 'target']
+        y_train = train_set.ix[:, train_set.columns == 'target']
+
+        # Scaling X
+        sc = StandardScaler()
+        X_train = sc.fit_transform(X_train)
+        X_test = sc.transform(X_test)
+
         to_predict = df_prediction.tail(1)
         to_predict = drop_column([to_predict], 'target_in_pips')[0]
         to_predict = drop_column([to_predict], 'target')[0]
         gmt = to_predict['Gmt time']
         to_predict = drop_column([to_predict], 'Gmt time')[0]
         X = sc.transform(to_predict)
-        best_models = do_grid_search([gdLog, gdRf, gdGB], X_train, y_train.values.ravel(), report, old_best_models)
+        best_models = do_grid_search([gdLog], X_train, y_train.values.ravel(), report, old_best_models)
+        m = [(str(model.best_estimator_), model.best_estimator_) for model in best_models]
         best_models = [model.best_estimator_ for model in best_models]
+        voting_classifier = VotingClassifier(estimators=m, voting='soft', n_jobs=-1)
+        voting_classifier.fit(X_train, y_train.values.ravel())
         best_models.append(voting_classifier)
         for model in best_models:
             report.write_predictions_next(model, X, gmt)

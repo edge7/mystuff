@@ -219,6 +219,7 @@ class CustomReport(object):
 
         # Evaluating on test set
         y_test_pred = model.predict(X_test)
+        y_test_prob = model.predict_proba(X_test)
 
         conf = confusion_matrix(y_test, y_test_pred)
         acc = accuracy_score(y_test, y_test_pred)
@@ -226,7 +227,8 @@ class CustomReport(object):
         rec = recall_score(y_test, y_test_pred, average="weighted")
         f1 = f1_score(y_test, y_test_pred, average="weighted")
         self.file_descriptor.write("\n --------------- \n")
-        self.file_descriptor.write("conf test: \n")
+        self.file_descriptor.write("PROBA TEST: " + str(y_test_prob))
+        self.file_descriptor.write("\nconf test: \n")
         self.file_descriptor.write(str(conf))
         self.file_descriptor.write("\n --------------- \n")
         self.file_descriptor.write("acc_test: \t")
