@@ -39,6 +39,8 @@ class CustomReport(object):
         self.dict_colors = {}
         self.feature_importance = {}
         self.equity = equity
+        self.last_y_test_classifier = None
+        self.last_mode_classifier = None
 
     def close(self):
         self.file_descriptor.close()
@@ -95,6 +97,13 @@ class CustomReport(object):
             self.feature_importance[name] = res
 
     def write_combined_results(self, models, X_train, y_train, X_test, y_test):
+
+        exp = not self.newGenerated()
+        # if exp is True, models have not been generated recently, so just return old predictions
+        if exp and self.last_y_test_classifier is not None:
+            self.file_descriptor.write("Model are not new, skipping classifier phase and return old results")
+            return self.last_y_test_classifier, self.last_mode_classifier
+
         m = [(str(model.best_estimator_), model.best_estimator_) for model in models]
         model = VotingClassifier(estimators=m, voting='soft', n_jobs=-1)
         modelE = EnsembleClassifier(m)
@@ -154,10 +163,12 @@ class CustomReport(object):
         self.file_descriptor.write("\n --------------- \n")
 
         self.write_prob_voting(model, X_test)
+        self.last_y_test_classifier = y_test_pred
+        self.last_mode_classifier = model
         return y_test_pred, model
 
+    # Used by classifier
     def write_result_in_pips(self, y_pred, gmt, target_in_pips):
-        th = THRESHOLD
         for idx, val in enumerate(y_pred):
             y = val
             gm = gmt[idx]
@@ -168,17 +179,28 @@ class CustomReport(object):
                 gm = dt.datetime.strptime(gm, '%m-%d-%Y').date()
 
             pips = target_in_pips[idx]
+            counter = self.counter.get("VOTING", 0.0)
+            counter += 1.0
+            self.counter["VOTING"] = counter
 
-            if y == "BUY" and pips >= th or (y == "SELL" and pips < th):
-                self.total_pips += abs(pips)
-                self.list_pips.append((gm, abs(pips)))
+            # OutOfMarket?
+            if y != "OUT":
+
+                if y == "BUY":
+                    self.total_pips += pips
+                    self.list_pips.append((gm, pips))
+
+                if y == "SELL":
+                    self.total_pips -= pips
+                    self.list_pips.append((gm, -pips))
+
                 self.list_pips_cum.append((gm, self.total_pips))
             else:
-                self.total_pips -= abs(pips)
-                self.list_pips.append((gm, - abs(pips)))
+                self.list_pips.append((gm, 0.0))
                 self.list_pips_cum.append((gm, self.total_pips))
 
-            self.write_chart()
+        rate = self.total_pips / counter
+        self.write_chart(label=" " + "{0:.4f}".format(rate) + "" + str(y))
 
     def write_predictions_next(self, model, X, time):
         self.file_descriptor.write("\n\n\n Writing predictions for time: " + str(time))
@@ -247,14 +269,14 @@ class CustomReport(object):
         self.file_descriptor.write(str(f1))
         self.file_descriptor.write("\n --------------- \n")
 
-    def write_chart(self):
+    def write_chart(self, label=""):
 
         x = [item[0] for item in self.list_pips_cum]
         y = [item[1] for item in self.list_pips_cum]
         plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m.%d.%Y'))
         plt.gca().xaxis.set_major_locator(mdates.YearLocator())
 
-        plt.plot(x, y, 'b', linewidth=0.5, label='vot')
+        plt.plot(x, y, 'b', linewidth=0.5, label='vot' + label)
 
         if not self.legend_vot:
             plt.legend(loc='upper left')
@@ -265,7 +287,7 @@ class CustomReport(object):
         plt.gcf().autofmt_xdate()
         plt.legend(loc='upper left')
         plt.savefig(self.file_path + self.equity + ".png")
-        #plt.close()
+        # plt.close()
         plt.clf()
 
     def write_prob_voting(self, voting_classifier, X):
@@ -273,11 +295,17 @@ class CustomReport(object):
         self.file_descriptor.write("\n\n\n Writing Prob. voting classifier: \n")
         self.file_descriptor.write(str(probs))
 
-
     def hasExpired(self, model):
         res = self.how_many_behind.get(str(model.model)[0:5], 0)
         if res == 1:
             return True
+        return False
+
+    def newGenerated(self):
+        for key in self.how_many_behind:
+            res = self.how_many_behind.get(key, 0)
+            if res == AHEAD:
+                return True
         return False
 
     def write_result_in_pips_single_model(self, y_pred, gmt, target_in_pips, model):
@@ -298,7 +326,7 @@ class CustomReport(object):
             last_prediction = self.last_prediction.get(str(model)[0:5], 0.0)
             how_many_behind = self.how_many_behind.get(str(model)[0:5], 0)
             counter = self.counter.get(str(model)[0:5], 0.0)
-            counter +=1.0
+            counter += 1.0
             self.counter[str(model)[0:5]] = counter
             how_many_behind -= 1
 
@@ -345,14 +373,13 @@ class CustomReport(object):
             self.file_descriptor.write("PIPS A TIME: " + str(pips_a_time) + "\n")
             self.file_descriptor.write("TOTAL PIPS: " + str(total_pips) + "\n\n")
 
-
             self.total_pips_s[k] = total_pips
             self.list_pips_s[k] = list_pips
             self.list_pips_cum_s[k] = list_pips_cum
 
-        self.write_chart_single_model(k, label = " " + "{0:.4f}".format(pips_a_time)+ "" + str(y))
+        self.write_chart_single_model(k, label=" " + "{0:.4f}".format(pips_a_time) + "" + str(y))
 
-    def write_chart_single_model(self, k, label = ""):
+    def write_chart_single_model(self, k, label=""):
         color = self.dict_colors.get(k, None)
         if color is None:
             color = self.list_colors[0]
@@ -390,7 +417,7 @@ class CustomReport(object):
         self.file_descriptor.write('\n\n\n\n\n\n\n\n Writing Feature IMPORTANCE:\n\n')
         self.file_descriptor.write(to_write)
 
-    def write_2d(self, X_train, y_train , X_test):
+    def write_2d(self, X_train, y_train, X_test):
 
         X = X_train
         y = y_train
@@ -434,5 +461,3 @@ class CustomReport(object):
         # Display legend and show plot
         plt.legend(loc=3)
         plt.savefig(self.file_path + "PCA.png")
-
-

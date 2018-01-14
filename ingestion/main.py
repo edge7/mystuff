@@ -194,7 +194,6 @@ if __name__ == "__main__":
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)
             res = model.predict(X_test)
-            # res = modify_res_in_according_to(res, model)
             report.write_result_in_pips_single_model(res.tolist(),
                                                      gmt[start + train_len: start + train_len + test_len].tolist(),
                                                      target_in_pips[
