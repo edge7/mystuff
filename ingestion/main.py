@@ -2,8 +2,12 @@ import argparse
 import pathlib
 
 import numpy as np
+import pandas as pd
+from sklearn.decomposition import PCA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.ensemble import VotingClassifier
+from sklearn.lda import LDA
 from sklearn.linear_model import LogisticRegression
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
@@ -17,6 +21,7 @@ from processing.processing import create_dataframe, drop_column, join_dfs, drop_
     create_target_ahead, AHEAD, apply_momentum
 from reporting.reporting import CustomReport
 from utility.utility import get_len_dfs
+import matplotlib.pyplot as plt
 
 TARGET_VARIABLE = "Close__diff"
 PERCENTAGE_CHANGE = 1.0
@@ -47,11 +52,10 @@ if __name__ == "__main__":
     # Inner join on GMT time
     df = join_dfs(dfs, "Gmt time")
 
-
     # Check that len is the same (inner join validation)
     # check_len_is_same(dfs_len, len(df.index))
 
-    #df = apply_df_test(df, "Close_" + args.target)
+    # df = apply_df_test(df, "Close_" + args.target)
 
     df = apply_ichimo(df, args.target)
 
@@ -63,7 +67,6 @@ if __name__ == "__main__":
     df = apply_bollinger_band(df, "Close_" + args.target, window=50)
 
     df = apply_diff_on(df, ["Volume_" + args.target])
-
 
     # df = apply_bollinger_band(df, "Close_" + args.target, window=15)
     # df = apply_bollinger_band(df, "Close_" + args.target, window=10)
@@ -78,18 +81,18 @@ if __name__ == "__main__":
     # df = apply_momentum(df, "Close_" + args.target, window=5)
     df = apply_momentum(df, "Close_" + args.target, window=5)
     # Apply diff to the column except for Gmt time
-    #df = apply_diff(df, ["Gmt time", "adf_", "dist_from_", "bollinger_band"])
+    # df = apply_diff(df, ["Gmt time", "adf_", "dist_from_", "bollinger_band"])
 
     # df = create_month_column(df)
     # Close_xdiff is the difference between Close_i - Close_i-1
-    #df['target'] = df.apply(lambda row: create_y(row, TARGET_VARIABLE), axis=1)
+    # df['target'] = df.apply(lambda row: create_y(row, TARGET_VARIABLE), axis=1)
 
     df = create_target_ahead(df, "Close_" + args.target, AHEAD, PERCENTAGE_CHANGE)
 
     # We don't want to have target in the same row as Close_xdiff, we want to move it up (shifting)
     # When we will make predictions in realtime, we want to predict Close_xdiff starting from previous row
-    #df['target'] = df['target'].shift(-1)
-    #df['target_in_pips'] = df[TARGET_VARIABLE].shift(-1)
+    # df['target'] = df['target'].shift(-1)
+    # df['target_in_pips'] = df[TARGET_VARIABLE].shift(-1)
     df['target_in_pips'] = df["Close_" + args.target].diff().shift(-1)
     # df = drop_column([df], "diff")[0]
     df = drop_original_values(df, crossList)
@@ -97,7 +100,7 @@ if __name__ == "__main__":
     # Apply percentage excluding the diff calculated above, gtm time and target column
     # df = apply_percentage(df, ["diff", "Gmt time", "target", "pips"]).ix[1:][:-1]
     # df = apply_mvavg(df, ["target", "_macdhist", "_signalline", "_macdline"], 5)
-    #df = apply_mvavg(df, ["target", "_mv_avg", "_macdhist", "_signalline", "_macdline"], 10)
+    # df = apply_mvavg(df, ["target", "_mv_avg", "_macdhist", "_signalline", "_macdline"], 10)
     # Drop diff pips
     df = drop_columns(df, ["Close_" + args.target + "_diff", "Open_" + args.target + "_diff",
                            "Low_" + args.target + "_diff",
@@ -146,14 +149,14 @@ if __name__ == "__main__":
 
         # Need to remove 0 label
 
-        #y_train_0 = y_train[y_train['target'] == 0].index.tolist()
-        #y_test_0 = y_test[y_test['target'] == 0].index.tolist()
+        # y_train_0 = y_train[y_train['target'] == 0].index.tolist()
+        # y_test_0 = y_test[y_test['target'] == 0].index.tolist()
 
-        #y_train = y_train[y_train["target"] != 0]
-        #y_test = y_test[y_test["target"] != 0]
+        # y_train = y_train[y_train["target"] != 0]
+        # y_test = y_test[y_test["target"] != 0]
 
-        #X_train = np.delete(X_train, y_train_0, axis=0)
-        #X_test = np.delete(X_test, y_test_0, axis=0)
+        # X_train = np.delete(X_train, y_train_0, axis=0)
+        # X_test = np.delete(X_test, y_test_0, axis=0)
 
         # Starting training
 
@@ -186,7 +189,7 @@ if __name__ == "__main__":
         gdANN = GridSearchCustomModel(MLPClassifier(solver='lbfgs', random_state=42, verbose=False, max_iter=12000),
                                       param_grid_ANN)
 
-        best_models = do_grid_search([gdLog], X_train, y_train.values.ravel(), report, old_best_models)
+        best_models = do_grid_search([gdLog, gdGB, gdRf], X_train, y_train.values.ravel(), report, old_best_models)
 
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)
@@ -230,13 +233,14 @@ if __name__ == "__main__":
         X_train = sc.fit_transform(X_train)
         X_test = sc.transform(X_test)
 
+
         to_predict = df_prediction.tail(1)
         to_predict = drop_column([to_predict], 'target_in_pips')[0]
         to_predict = drop_column([to_predict], 'target')[0]
         gmt = to_predict['Gmt time']
         to_predict = drop_column([to_predict], 'Gmt time')[0]
         X = sc.transform(to_predict)
-        best_models = do_grid_search([gdLog], X_train, y_train.values.ravel(), report, old_best_models)
+        best_models = do_grid_search([gdLog, gdGB, gdRf], X_train, y_train.values.ravel(), report, old_best_models)
         m = [(str(model.best_estimator_), model.best_estimator_) for model in best_models]
         best_models = [model.best_estimator_ for model in best_models]
         voting_classifier = VotingClassifier(estimators=m, voting='soft', n_jobs=-1)
@@ -245,6 +249,8 @@ if __name__ == "__main__":
         for model in best_models:
             report.write_predictions_next(model, X, gmt)
         report.write_prob_voting(voting_classifier, X)
+
+        report.write_2d(X_train, y_train, X)
 
     report.consolidate_feature_importance()
     report.close()

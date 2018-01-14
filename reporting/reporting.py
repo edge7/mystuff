@@ -2,7 +2,10 @@ import time
 
 import os
 
+import pandas as pd
+from sklearn.decomposition import PCA
 from sklearn.ensemble import VotingClassifier
+from sklearn.lda import LDA
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
 
 from Ensemble.ensemble import EnsembleClassifier
@@ -386,3 +389,50 @@ class CustomReport(object):
             to_write += '\n'
         self.file_descriptor.write('\n\n\n\n\n\n\n\n Writing Feature IMPORTANCE:\n\n')
         self.file_descriptor.write(to_write)
+
+    def write_2d(self, X_train, y_train , X_test):
+
+        X = X_train
+        y = y_train
+        lda = LDA(n_components=2)  # 2-dimensional LDA
+        lda_transformed = pd.DataFrame(lda.fit_transform(X_train, y))
+
+        # Plot all three series
+        plt.scatter(lda_transformed[(y == "OUT")["target"].tolist()][0],
+                    lda_transformed[(y == "OUT")["target"].tolist()][1], label='OUT', c='red')
+        plt.scatter(lda_transformed[(y == "BUY")["target"].tolist()][0],
+                    lda_transformed[(y == "BUY")["target"].tolist()][1], label='BUY', c='blue')
+        plt.scatter(lda_transformed[(y == "SELL")["target"].tolist()][0],
+                    lda_transformed[(y == "SELL")["target"].tolist()][1], label='SELL',
+                    c='lightgreen')
+
+        xx = lda.transform(X_test)
+        plt.scatter(xx[0][0],
+                    xx[0][1], label='AHEAD',
+                    c='black')
+
+        # Display legend and show plot
+        plt.legend(loc=3)
+        plt.savefig(self.file_path + " lda.png")
+        plt.clf()
+        lda = PCA(n_components=2)  # 2-dimensional PCA
+        lda_transformed = pd.DataFrame(lda.fit_transform(X_train, y))
+
+        # Plot all three series
+        plt.scatter(lda_transformed[(y == "OUT")["target"].tolist()][0],
+                    lda_transformed[(y == "OUT")["target"].tolist()][1], label='OUT', c='red')
+        plt.scatter(lda_transformed[(y == "BUY")["target"].tolist()][0],
+                    lda_transformed[(y == "BUY")["target"].tolist()][1], label='BUY', c='blue')
+        plt.scatter(lda_transformed[(y == "SELL")["target"].tolist()][0],
+                    lda_transformed[(y == "SELL")["target"].tolist()][1], label='SELL',
+                    c='lightgreen')
+
+        xx = lda.transform(X_test)
+        plt.scatter(xx[0][0],
+                    xx[0][1], label='AHEAD',
+                    c='black')
+        # Display legend and show plot
+        plt.legend(loc=3)
+        plt.savefig(self.file_path + "PCA.png")
+
+
