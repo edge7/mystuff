@@ -2,9 +2,11 @@ import os
 import pathlib
 import subprocess
 
-input_dir = "/home/toniotonia47/Desktop/stockML/data/"
-# input_dir = "/home/edge7/Desktop/MLApplied/Forex/Data/Stock/"
-best_lens = {input_dir + "CADJPY_D": [ 50, 100, 150, 200, 300, 500, 800],
+#input_dir = "/home/toniotonia47/Desktop/stockML/data/"
+input_dir = "/home/edge7/Desktop/Documents/MLApplied/Forex/Data/Stock/"
+best_lens = {input_dir + "CADJPY": [50, 75, 100],
+             input_dir + "NZDJPY": [50, 75, 100],
+             input_dir + "AUDUSD": [50, 75, 100]
              }
 
 if __name__ == "__main__":
@@ -19,8 +21,8 @@ if __name__ == "__main__":
         else:
             for train_len in train_lens:
                 print("Running: " + str(stock_dir) + " con train_len: " + str(train_len))
-                command = "python3.6 /home/toniotonia47/PycharmProjects/mystuff/ingestion/main.py --datapath "
-                # command = "python3.5 /home/edge7/PycharmProjects/MlStock/ingestion/main.py --datapath "
+                #command = "python3.6 /home/toniotonia47/PycharmProjects/mystuff/ingestion/main.py --datapath "
+                command = "python3.5 /home/edge7/PycharmProjects/MlStock/ingestion/main.py --datapath "
                 command += str(stock_dir)
                 target = str(stock_dir).split("/")[-1]
                 command += " --target " + target
