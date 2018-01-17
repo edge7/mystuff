@@ -18,7 +18,7 @@ from gridSearch.gridSearch import GridSearchCustomModel
 from processing.processing import create_dataframe, drop_column, join_dfs, drop_original_values, \
     apply_macd, get_random_list, \
     apply_bollinger_band, drop_columns, apply_ichimo, apply_stochastic, apply_diff_on, \
-    create_target_ahead, AHEAD, apply_momentum
+    create_target_ahead, AHEAD, apply_momentum, apply_rsi
 from reporting.reporting import CustomReport
 from utility.utility import get_len_dfs
 import matplotlib.pyplot as plt
@@ -61,6 +61,7 @@ if __name__ == "__main__":
 
     df = apply_stochastic(df, args.target)
 
+    df = apply_rsi(df, args.target)
     # Applying MAC
     df = apply_macd(df, 26, 12)
 
@@ -189,7 +190,7 @@ if __name__ == "__main__":
         gdANN = GridSearchCustomModel(MLPClassifier(solver='lbfgs', random_state=42, verbose=False, max_iter=12000),
                                       param_grid_ANN)
 
-        best_models = do_grid_search([gdLog, gdGB, gdRf], X_train, y_train.values.ravel(), report, old_best_models)
+        best_models = do_grid_search([gdLog, gdRf, gdGB], X_train, y_train.values.ravel(), report, old_best_models)
 
         for model in best_models:
             report.write_score(model, X_train, y_train, X_test, y_test)
@@ -239,7 +240,7 @@ if __name__ == "__main__":
         gmt = to_predict['Gmt time']
         to_predict = drop_column([to_predict], 'Gmt time')[0]
         X = sc.transform(to_predict)
-        best_models = do_grid_search([gdLog, gdGB, gdRf], X_train, y_train.values.ravel(), report, old_best_models)
+        best_models = do_grid_search([gdLog, gdRf, gdGB], X_train, y_train.values.ravel(), report, old_best_models)
         m = [(str(model.best_estimator_), model.best_estimator_) for model in best_models]
         best_models = [model.best_estimator_ for model in best_models]
         voting_classifier = VotingClassifier(estimators=m, voting='soft', n_jobs=-1)

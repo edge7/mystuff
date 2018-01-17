@@ -22,6 +22,7 @@ def do_grid_search(list_models, X, y, report, old_best_models):
         hasExpired = report.hasExpired(model)
         if not hasExpired and old_best_models is not None:
             to_return.append(old_best_models[c])
+            report.file_descriptor.write("\n\n ***** NO MODEL GENERATED: " + str(model.model)[0:10]  + "\n")
             continue
         report.file_descriptor.write("\n\n\n ***** NEW MODEL FOR MODEL " + str(model.model)[0:10] +
                                      " is being generated ****\n\n\n")

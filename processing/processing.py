@@ -300,6 +300,26 @@ def apply_stochastic(df, t):
     return df
 
 
+def gain(x, window):
+    sum = 0.0
+    for i in x.tolist():
+        if i > 0:
+            sum += i
+    return sum / window
+
+def loss(x, window):
+    loss = 0.0
+    for i in x.tolist():
+        if i < 0:
+            loss += abs(i)
+    return loss / window
+
+def apply_rsi(df, t, window = 14):
+    g = df[t + "_Body_in_pips"].rolling(window=window).apply(lambda x: gain(x, window))
+    l = df[t + "_Body_in_pips"].rolling(window=window).apply(lambda x: loss(x, window))
+    df["RSI" + str(window)] = 100.0 - (100 / (1 + (g / l) ))
+    return df
+
 def apply_macd(df, slow, fast):
     applyTo = "Close"
     for col in df:
