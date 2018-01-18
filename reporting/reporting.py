@@ -69,7 +69,10 @@ class CustomReport(object):
         try:
             x = [dt.datetime.strptime(gm, '%Y-%m-%d').date() for gm in x]
         except Exception as e:
-            x = [dt.datetime.strptime(gm, '%m-%d-%Y').date() for gm in x]
+            try:
+                x = [dt.datetime.strptime(gm, '%m-%d-%Y').date() for gm in x]
+            except Exception as e:
+                x = [dt.datetime.strptime(gm, '%d.%m.%Y %H:%M:%S.%f') for gm in x]
 
             # y = self.p
             # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m.%d.%Y'))
@@ -176,7 +179,10 @@ class CustomReport(object):
                 tt = gm.split(" ")[0]
                 gm = dt.datetime.strptime(tt, '%Y-%m-%d').date()
             except Exception as e:
-                gm = dt.datetime.strptime(gm, '%m-%d-%Y').date()
+                try:
+                    gm = dt.datetime.strptime(gm, '%m-%d-%Y').date()
+                except Exception as e:
+                    gm = dt.datetime.strptime(gm, '%d.%m.%Y %H:%M:%S.%f')
 
             pips = target_in_pips[idx]
             counter = self.counter.get("VOTING", 0.0)
@@ -273,8 +279,8 @@ class CustomReport(object):
 
         x = [item[0] for item in self.list_pips_cum]
         y = [item[1] for item in self.list_pips_cum]
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m.%d.%Y'))
-        plt.gca().xaxis.set_major_locator(mdates.YearLocator())
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%d.%m.%Y %H:%M:%S.%f'))
+        plt.gca().xaxis.set_major_locator(mdates.AutoDateLocator())
 
         plt.plot(x, y, 'b', linewidth=0.5, label='vot' + label)
 
@@ -317,7 +323,10 @@ class CustomReport(object):
                 tt = gm.split(" ")[0]
                 gm = dt.datetime.strptime(tt, '%Y-%m-%d').date()
             except Exception as e:
-                gm = dt.datetime.strptime(gm, '%m-%d-%Y').date()
+                try:
+                    gm = dt.datetime.strptime(gm, '%m-%d-%Y').date()
+                except Exception as e:
+                    gm = dt.datetime.strptime(gm, '%d.%m.%Y %H:%M:%S.%f')
 
             pips = target_in_pips[idx]
             total_pips = self.total_pips_s.get(str(model)[0:5], 0.0)
@@ -388,8 +397,8 @@ class CustomReport(object):
 
         x = [item[0] for item in self.list_pips_cum_s[k]]
         y = [item[1] for item in self.list_pips_cum_s[k]]
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%m.%d.%Y'))
-        plt.gca().xaxis.set_major_locator(mdates.YearLocator())
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%d.%m.%Y %H:%M:%S.%f'))
+        plt.gca().xaxis.set_major_locator(mdates.AutoDateLocator())
 
         plt.plot(x, y, color, linewidth=0.5, label=k + label)
 

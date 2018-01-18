@@ -2,12 +2,8 @@ import argparse
 import pathlib
 
 import numpy as np
-import pandas as pd
-from sklearn.decomposition import PCA
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.ensemble import VotingClassifier
-from sklearn.lda import LDA
 from sklearn.linear_model import LogisticRegression
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
@@ -21,10 +17,9 @@ from processing.processing import create_dataframe, drop_column, join_dfs, drop_
     create_target_ahead, AHEAD, apply_momentum, apply_rsi
 from reporting.reporting import CustomReport
 from utility.utility import get_len_dfs
-import matplotlib.pyplot as plt
 
 TARGET_VARIABLE = "Close__diff"
-PERCENTAGE_CHANGE = 1.0
+PERCENTAGE_CHANGE = 0.04
 crossList = []
 
 if __name__ == "__main__":
@@ -45,7 +40,7 @@ if __name__ == "__main__":
     dfs = create_dataframe(flist, "Gmt time", crossList)
 
     # Dropping volume columns
-    # dfs = drop_column(dfs, "Volume")
+    dfs = drop_column(dfs, "Volume")
     dfs = drop_column(dfs, "index")
     dfs_len = get_len_dfs(dfs)
 
