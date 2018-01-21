@@ -2,6 +2,7 @@ import argparse
 import pathlib
 
 import numpy as np
+import time
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.ensemble import VotingClassifier
 from sklearn.linear_model import LogisticRegression
@@ -17,6 +18,7 @@ from processing.processing import create_dataframe, drop_column, join_dfs, drop_
     create_target_ahead, AHEAD, apply_momentum, apply_rsi
 from reporting.reporting import CustomReport
 from utility.utility import get_len_dfs
+import os
 
 TARGET_VARIABLE = "Close__diff"
 PERCENTAGE_CHANGE = 0.04
@@ -35,11 +37,19 @@ if __name__ == "__main__":
     notification_file = "/home/edge7/Desktop/notification_file_" + args.target
     data_file = "/home/edge7/Desktop/price_data_" + args.target
     result_file = "/home/edge7/Desktop/result_file_" + args.target
+    TARGET_VARIABLE = args.target + "_Body_in_pips"
+    counter = 0
+    crossList.append(args.target)
+    old_best_models = None
+    # Infinite loop
     while True:
-        TARGET_VARIABLE = args.target + "_Body_in_pips"
 
-        flist = [p for p in pathlib.Path(args.datapath).iterdir() if p.is_file()]
-        crossList.append(args.target)
+        # Wait for notification file
+        while not os.path.isfile(notification_file):
+            time.sleep(1)
+
+        flist = [pathlib.Path(data_file)]
+
         # Creating n dataframe where n is the number of files
         dfs = create_dataframe(flist, "Gmt time", crossList)
 
@@ -81,19 +91,13 @@ if __name__ == "__main__":
         # df = drop_column([df], "diff")[0]
         df = drop_column([df], 'target_in_pips')[0]
 
-        # Preparing reporting object
-        report = CustomReport(args.datapath, df, TARGET_VARIABLE, args.train_len, args.predict, target_in_pips.cumsum(),
-                              gmt, args.target)
-        report.init()
-
         total_length = df.shape[0]
         start = 0
         train_len = int(args.train_len)
         test_len = 1
 
-        old_best_models = None
-        df = df.tail(args.train_len + 1)
-        train_set_live = df.head(args.train_len)
+        df = df.tail(int(args.train_len) + 1).reset_index(drop=True)
+        train_set_live = df.head(int(args.train_len))
         to_predict = df.tail(1)
 
         X_train = train_set_live.ix[:, train_set_live.columns != 'target']
@@ -136,28 +140,24 @@ if __name__ == "__main__":
         gdANN = GridSearchCustomModel(MLPClassifier(solver='lbfgs', random_state=42, verbose=False, max_iter=12000),
                                       param_grid_ANN)
 
-        best_models = do_grid_search([gdLog, gdRf, gdGB], X_train, y_train.values.ravel(), report, old_best_models)
+        best_models = do_grid_search([gdLog], X_train, y_train.values.ravel(), counter, old_best_models)
 
-        # for model in best_models:
-        #   report.write_score(model, X_train, y_train, X_test, y_test)
-        #  res = model.predict(X_test)
-        #  report.write_result_in_pips_single_model(res.tolist(),
-        #                                          gmt[start + train_len: start + train_len + test_len].tolist(),
-        #                                         target_in_pips[
-        #                                        start + train_len: start + train_len + test_len].tolist(),
-        #                                       model.best_estimator_)
+        res = "HOLD"
+        if counter == 0:
+            tp = df_prediction.tail(1)
+            gmt = tp['Gmt time']
+            m = [(str(model.best_estimator_), model.best_estimator_) for model in best_models]
+            voting_classifier = VotingClassifier(estimators=m, voting='soft', n_jobs=-1)
+            voting_classifier.fit(X_train, y_train.values.ravel())
+            res = voting_classifier.predict(X_test)[0]
 
-        #y_test_pred, voting_classifier = report.write_combined_results(best_models, X_train, y_train, X_test, y_test)
-        #report.write_result_in_pips(y_test_pred.tolist(),
-        #                            gmt[start + train_len: start + train_len + test_len].tolist(),
-        #                            target_in_pips[start + train_len: start + train_len + test_len].tolist())
+        with open(result_file, 'w') as f:
+            f.write(res)
 
-        report.file_descriptor.write("\n\n\n *** FINAL PREDICTION ***")
-        m = [(str(model.best_estimator_), model.best_estimator_) for model in best_models]
-        voting_classifier = VotingClassifier(estimators=m, voting='soft', n_jobs=-1)
-        voting_classifier.fit(X_train, y_train.values.ravel())
-        best_models.append(voting_classifier)
-        voting_classifier.predict(X_test)
+        os.remove(notification_file)
+        old_best_models = best_models
 
-    report.close()
+        counter += 1
+        counter %= 5
+
     print('end')
