@@ -1,8 +1,9 @@
 import random
 
 import pandas as pd
-from numpy import nan
+from numpy import nan, array
 import numpy as np
+from sklearn import linear_model
 
 from algos.algos import adf
 
@@ -26,7 +27,7 @@ def apply_candle(row, toUse):
         body_in_pips = close - open
         low_in_pips = low - close
 
-    return [high_in_pips, body_in_pips, low_in_pips]
+    return [abs(high_in_pips), body_in_pips, abs(low_in_pips)]
 
 
 def create_cols(l):
@@ -81,6 +82,43 @@ def create_cols(l):
                                                                                        pd.Series(low_before_before))]
 
 
+def apply_low(row, toUse):
+    body = row["BodyInPips"]
+    open = row["Open_" + toUse]
+    low = row["Low_" + toUse]
+    close = row["Close_" + toUse]
+    if body > 0:
+        low_in_pips = open - low
+    else:
+        low_in_pips = close - low
+    return low_in_pips
+
+
+def apply_high(row, toUse):
+    body = row["BodyInPips"]
+    open = row["Open_" + toUse]
+    close = row["Close_" + toUse]
+    high = row["High_" + toUse]
+    if body > 0:
+        high_in_pips = high - close
+    else:
+        high_in_pips = high - open
+    return high_in_pips
+
+
+def add_candlestick_columns_2(df, toUse):
+    df["BodyInPips"] = - df["Open_" + toUse] + df["Close_" + toUse]
+    df["LowInPips"] = df.apply(lambda row: apply_low(row, toUse), axis=1)
+    df["HighInPips"] = df.apply(lambda row: apply_high(row, toUse), axis=1)
+    df["High/Body"] = df["HighInPips"] / df["BodyInPips"]
+    df["Low/Body"] = df["LowInPips"] / df["BodyInPips"]
+    df["High/BodyP"] = df["High/Body"].shift(1)
+    df["Low/BodyP"] = df["Low/Body"].shift(1)
+    df["BodyInPipsP"] = df["BodyInPips"].shift(1)
+    df["Body/BodyP"] = pd.Series.abs(df["BodyInPips"] / df["BodyInPipsP"])
+    df["Body/BodyPP"] = df["Body/BodyP"].shift(1)
+    return df
+
 def add_candlestick_columns(df, toUse):
     ret = df.apply(lambda row: apply_candle(row, toUse), axis=1)
     ret = create_cols(ret)
@@ -90,8 +128,8 @@ def add_candlestick_columns(df, toUse):
     df[toUse + "_High_in_pips"] = high_in_pips
     df[toUse + "_Body_in_pips"] = body_in_pips
     df[toUse + "_Low_in_pips"] = low_in_pips
-    # df[toUse + "_High/Body"] = abs(high_in_pips / body_in_pips)
-    # df[toUse + "_Low/body"] = abs(low_in_pips / body_in_pips)
+    df[toUse + "_High/Body"] = high_in_pips / body_in_pips
+    df[toUse + "_Low/body"] = low_in_pips / body_in_pips
     # df[toUse + "_Low/High"] = abs(low_in_pips / high_in_pips)
     # df[toUse + "_High-Low"] = abs(high_in_pips - low_in_pips)
     # df[toUse + "_High-body"] = abs(high_in_pips) - abs(body_in_pips)
@@ -104,8 +142,8 @@ def add_candlestick_columns(df, toUse):
     df[toUse + "_Low_in_pips_bef"] = low_in_pips
     # df[toUse + "_High-body_bef"] = abs(high_in_pips) - abs(body_in_pips)
     # df[toUse + "_Low-body_bef"] = abs(low_in_pips) - abs(body_in_pips)
-    # df[toUse + "_High/Body_bef"] = abs(high_in_pips / body_in_pips)
-    # df[toUse + "_Low/body_bef"] = abs(low_in_pips / body_in_pips)
+    df[toUse + "_High/Body_bef"] = high_in_pips / body_in_pips
+    df[toUse + "_Low/body_bef"] = low_in_pips / body_in_pips
     # df[toUse + "_Low/High_bef"] = abs(low_in_pips / high_in_pips)
     # df[toUse + "_High-Low_bef"] = abs(high_in_pips - low_in_pips)
 
@@ -116,9 +154,9 @@ def add_candlestick_columns(df, toUse):
     df[toUse + "_Body_in_pips_bef_bef"] = body_in_pips
     df[toUse + "_Low_in_pips_bef_bef"] = low_in_pips
 
-    df[toUse + "_CurrentBody-Body_bef"] = abs(df[toUse + "_Body_in_pips"]) - abs(df[toUse + "_Body_in_pips_bef"])
-    df[toUse + "_CurrentHigh-High_bef"] = abs(df[toUse + "_High_in_pips"]) - abs(df[toUse + "_High_in_pips_bef"])
-    df[toUse + "_CurrentLow-Low_bef"] = abs(df[toUse + "_Low_in_pips"]) - abs(df[toUse + "_Low_in_pips_bef"])
+    df[toUse + "_CurrentBody/Body_bef"] = abs(df[toUse + "_Body_in_pips"]) / abs(df[toUse + "_Body_in_pips_bef"])
+    df[toUse + "_CurrentHigh/High_bef"] = abs(df[toUse + "_High_in_pips"]) / abs(df[toUse + "_High_in_pips_bef"])
+    df[toUse + "_CurrentLow/Low_bef"] = abs(df[toUse + "_Low_in_pips"]) / abs(df[toUse + "_Low_in_pips_bef"])
     return df
 
 
@@ -134,7 +172,7 @@ def transform_columns_names(df, crossList, path, excluded, keep_names=False):
             # df[col + "_" + toUse] = df[col + "_" + toUse].rolling(window=10).mean()
             del df[col]
 
-    df = add_candlestick_columns(df, toUse)
+    df = add_candlestick_columns_2(df, toUse)
 
     return df
 
@@ -158,7 +196,7 @@ def apply_df_test(df, target):
 def create_dataframe(flist, excluded, crossList, keep_names=True):
     l = list()
     for path in flist:
-        df = pd.read_csv(str(path))
+        df = pd.read_csv(str(path), delimiter=";")
         if 'Adj Close' in df:
             del df['Adj Close']
         # cols = list(df.columns.values)
@@ -260,6 +298,20 @@ def apply_ichimo(df, t):
     return df
 
 
+def lin_reg_dist(x, window):
+    line = linear_model.LinearRegression()
+    f = line.fit(array(range(1, window + 1)).reshape(-1, 1), x)
+    y = f.predict(x[-1])
+    return x[-1] - y
+
+
+def apply_linear_regression(df, target, window=50):
+    df["dist_from_lin_reg_" + str(window)] = df[target].rolling(window=window).apply(lambda x: lin_reg_dist(x, window))
+    df["dist_from_lin_reg_" + str(window * 2)] = df[target].rolling(window=window * 2).apply(
+        lambda x: lin_reg_dist(x, window * 2))
+    return df
+
+
 def create_target_ahead(df, CLOSE_VARIABLE, AHEAD, threshold):
     number_rows = df.shape[0]
     # Iterating row by row, check change after AHEAD candles
@@ -270,11 +322,13 @@ def create_target_ahead(df, CLOSE_VARIABLE, AHEAD, threshold):
         end = min(number_rows, index + AHEAD + 1)
         for next in range(index + 1, end):
             value = df.iloc[[next]][CLOSE_VARIABLE][next]
-            pctg = (value / start - 1) * 100.0
+            pctg = value - start
             if pctg > threshold:
-                to_set += 1
+                to_set = 1
+                break
             if pctg < - threshold:
-                to_set -= 1
+                to_set = -1
+                break
         if to_set > 0:
             to_set_ = "BUY"
         if to_set < 0:
@@ -307,6 +361,7 @@ def gain(x, window):
             sum += i
     return sum / window
 
+
 def loss(x, window):
     loss = 0.0
     for i in x.tolist():
@@ -314,11 +369,13 @@ def loss(x, window):
             loss += abs(i)
     return loss / window
 
-def apply_rsi(df, t, window = 14):
-    g = df[t + "_Body_in_pips"].rolling(window=window).apply(lambda x: gain(x, window))
-    l = df[t + "_Body_in_pips"].rolling(window=window).apply(lambda x: loss(x, window))
-    df["RSI" + str(window)] = 100.0 - (100 / (1 + (g / l) ))
+
+def apply_rsi(df, t, window=14):
+    g = df[t + "BodyInPips"].rolling(window=window).apply(lambda x: gain(x, window))
+    l = df[t + "BodyInPips"].rolling(window=window).apply(lambda x: loss(x, window))
+    df["RSI" + str(window)] = 100.0 - (100 / (1 + (g / l)))
     return df
+
 
 def apply_macd(df, slow, fast):
     applyTo = "Close"
@@ -355,13 +412,28 @@ def my_round(x):
         return 1
 
 
+def apply_support_and_resistance(df, target, window=50):
+    close_label = "Close_" + target
+    high_label = "High_" + target
+    low_label = "Low_" + target
+    close = df[close_label].rolling(window=window).mean()
+    high = df[high_label].rolling(window=window).apply(lambda x: np.max(x))
+    low = df[low_label].rolling(window=window).apply(lambda x: np.min(x))
+    p = (high + low + close) / 3.0
+    r1 = (2 * p) - low
+    s1 = (2 * p) - high
+    df["distanceFromR1"] = df["Close_" + target] - r1
+    df["distanceFromS1"] = df["Close_" + target] - s1
+    return df
+
+
 def apply_bollinger_band(df, column, window=25):
     df['bollinger_band_up_' + str(window)] = \
         (df[column].rolling(window=window).mean() + 2.0 * df[column].rolling(window=window).std()) - df[column]
 
     df['bollinger_band_down_' + str(window)] = df[column] - (
-        df[column].rolling(window=window).mean() - 2.0 * df[column].rolling(
-            window=window).std())
+            df[column].rolling(window=window).mean() - 2.0 * df[column].rolling(
+        window=window).std())
 
     # df['bollinger_band_diff_' + str(window)] = df['bollinger_band_up_' + str(window)] - df['bollinger_band_down_' + str(window)]
     return df
@@ -376,7 +448,7 @@ def apply_diff_on(df, l):
 
 def get_random_list(length):
     l = [my_round(random.random()) for _ in range(0, length, 1)]
-    l = ["BUY" if x == 1  else "SELL" for x in l]
+    l = ["BUY" if x == 1 else "SELL" for x in l]
     return l
 
 

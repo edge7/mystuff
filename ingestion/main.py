@@ -1,28 +1,27 @@
 import argparse
+import os
 import pathlib
+import time
 
 import numpy as np
-import time
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.ensemble import VotingClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 
+from feature_selection.feature_importance import FeatureSelection
 from fitmodel.fitmodel import do_grid_search
 from gridSearch.gridSearch import GridSearchCustomModel
 from processing.processing import create_dataframe, drop_column, join_dfs, drop_original_values, \
-    apply_macd, get_random_list, \
-    apply_bollinger_band, drop_columns, apply_ichimo, apply_stochastic, apply_diff_on, \
-    create_target_ahead, AHEAD, apply_momentum, apply_rsi
-from reporting.reporting import CustomReport
+    apply_macd, apply_bollinger_band, drop_columns, apply_ichimo, apply_stochastic, apply_diff_on, \
+    create_target_ahead, AHEAD, apply_momentum, apply_rsi, apply_distance_from_max, apply_distance_from_min, \
+    apply_support_and_resistance, apply_linear_regression
 from utility.utility import get_len_dfs
-import os
 
-TARGET_VARIABLE = "Close__diff"
-PERCENTAGE_CHANGE = 0.04
+CHANGE_IN_PIPS = 0.0075
 crossList = []
+prefix = "C:\\Users\\Administrator\\AppData\\Roaming\\MetaQuotes\\Terminal\\1DAFD9A7C67DC84FE37EAA1FC1E5CF75\\tester\\files\\"
 
 if __name__ == "__main__":
 
@@ -34,19 +33,34 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    notification_file = "/home/edge7/Desktop/notification_file_" + args.target
-    data_file = "/home/edge7/Desktop/price_data_" + args.target
-    result_file = "/home/edge7/Desktop/result_file_" + args.target
-    TARGET_VARIABLE = args.target + "_Body_in_pips"
+    notification_file = prefix + "notificationfile_" + args.target
+    data_file = prefix + "pricefile_" + args.target
+    result_file = prefix + "resultfile_" + args.target
     counter = 0
     crossList.append(args.target)
     old_best_models = None
+    fs = None
+    fs_counter = 0
     # Infinite loop
     while True:
 
         # Wait for notification file
         while not os.path.isfile(notification_file):
             time.sleep(1)
+
+        # res = "HOLD"
+        # if counter != 0:
+        #      counter += 1
+        #      counter %= AHEAD
+        #      lines = []
+        #      with open(data_file, 'r') as f:
+        #          lines = f.readlines()
+        #      with open(data_file, 'w') as f:
+        #          f.writelines(lines[:1] + lines[2:])
+        # #     with open(result_file, 'w') as f:
+        # #         f.write(res)
+        # #     os.remove(notification_file)
+        # #     continue
 
         flist = [pathlib.Path(data_file)]
 
@@ -65,16 +79,22 @@ if __name__ == "__main__":
 
         df = apply_stochastic(df, args.target)
 
-        df = apply_rsi(df, args.target)
+        df = apply_rsi(df, "")
         # Applying MAC
         df = apply_macd(df, 26, 12)
 
         df = apply_bollinger_band(df, "Close_" + args.target, window=50)
+        df = apply_bollinger_band(df, "Close_" + args.target, window=100)
 
+        df = apply_support_and_resistance(df, args.target)
         df = apply_diff_on(df, ["Volume_" + args.target])
-        df = apply_momentum(df, "Close_" + args.target, window=5)
+        df = apply_momentum(df, "Close_" + args.target, window=10)
 
-        df = create_target_ahead(df, "Close_" + args.target, AHEAD, PERCENTAGE_CHANGE)
+        df = apply_distance_from_max(df, "Close_" + args.target, window=50)
+        df = apply_distance_from_min(df, "Close_" + args.target, window=50)
+        df = apply_linear_regression(df, "Close_" + args.target, window=75)
+
+        df = create_target_ahead(df, "Close_" + args.target, AHEAD, CHANGE_IN_PIPS)
 
         df['target_in_pips'] = df["Close_" + args.target].diff().shift(-1)
         df = drop_original_values(df, crossList)
@@ -86,11 +106,14 @@ if __name__ == "__main__":
         df = df.dropna(how='any')
         target_in_pips = df['target_in_pips']
         t = df['target']
+        with open(prefix + " " + args.target, 'a') as f:
+            f.write(str(t.tolist()[-int(args.train_len):]) + "\n")
         gmt = df['Gmt time']
         df = drop_column([df], "Gmt time")[0]
         # df = drop_column([df], "diff")[0]
         df = drop_column([df], 'target_in_pips')[0]
-
+        if fs is None:
+            fs = FeatureSelection(df, prefix + "_" + args.target)
         total_length = df.shape[0]
         start = 0
         train_len = int(args.train_len)
@@ -131,33 +154,48 @@ if __name__ == "__main__":
                          }
 
         gdGB = GridSearchCustomModel(GradientBoostingClassifier(random_state=42, max_features='auto'), param_grid_GB)
+        try:
+            best_models = do_grid_search([gdRf, gdGB], X_train, y_train.values.ravel(), 0, old_best_models)
+            for i in best_models:
+                if "RandomForest" in str(i.best_estimator_):
+                    rf = i.best_estimator_
+            fs.write_feature_importance(rf)
+            fs_counter += 1
+        except Exception as e:
+            print(e)
+            best_models = old_best_models
+            with open(prefix + "_" + args.target + "_LOG", 'a') as f:
+                f.write(str(e))
 
-        param_grid_ANN = {"hidden_layer_sizes": [(20, 20), (15,), (8, 3), (5, 5), (10, 10), (40, 40), (10, 5),
-                                                 (15, 13), (5, 10), (5, 5, 5), (10, 10, 10)],
-                          'activation': ['tanh', 'relu'],
-                          'alpha': 10.0 ** -np.arange(1, 7)}
+            os.remove(notification_file)
+            with open(result_file, 'w') as f:
+                f.write("HOLD")
+            continue
 
-        gdANN = GridSearchCustomModel(MLPClassifier(solver='lbfgs', random_state=42, verbose=False, max_iter=12000),
-                                      param_grid_ANN)
 
-        best_models = do_grid_search([gdLog], X_train, y_train.values.ravel(), counter, old_best_models)
-
-        res = "HOLD"
-        if counter == 0:
-            tp = df_prediction.tail(1)
-            gmt = tp['Gmt time']
-            m = [(str(model.best_estimator_), model.best_estimator_) for model in best_models]
-            voting_classifier = VotingClassifier(estimators=m, voting='soft', n_jobs=-1)
-            voting_classifier.fit(X_train, y_train.values.ravel())
-            res = voting_classifier.predict(X_test)[0]
-
+        tp = df_prediction.tail(1)
+        gmt = tp['Gmt time']
+        m = [(str(model.best_estimator_), model.best_estimator_) for model in best_models]
+        voting_classifier = VotingClassifier(estimators=m, voting='soft', n_jobs=-1)
+        voting_classifier.fit(X_train, y_train.values.ravel())
+        res = voting_classifier.predict(X_test)[0]
+        print("vot")
+        print(res)
+        print(voting_classifier.predict_proba(X_test)[0])
+        print(m[0][0])
+        print(m[0][1].predict_proba(X_test)[0])
+        print(m[1][1].predict_proba(X_test)[0])
         with open(result_file, 'w') as f:
             f.write(res)
 
         os.remove(notification_file)
         old_best_models = best_models
 
+        if fs_counter % 30 == 0:
+            fs_counter = 0
+            fs.consolidate_feature_importance()
+
         counter += 1
-        counter %= 5
+        counter %= AHEAD
 
     print('end')
