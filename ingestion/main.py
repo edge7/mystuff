@@ -90,8 +90,8 @@ if __name__ == "__main__":
         sup = c + df.tail(1)["closest_res" + "test_create"].tolist()[0]
         res = c + df.tail(1)["closest_sup" + "test_create"].tolist()[0]
         with open(prefix + "SR" + args.target, 'w') as f:
-            f.write(sup + "\n")
-            f.write(res + "\n")
+            f.write(str(sup) + "\n")
+            f.write(str(res) + "\n")
 
         df = apply_bollinger_band(df, "Close_" + args.target, window=50)
         df = apply_bollinger_band(df, "Close_" + args.target, window=100)
