@@ -1,6 +1,7 @@
 import random
 
 import pandas as pd
+import matplotlib.pyplot as plt
 from numpy import nan, array
 import numpy as np
 from sklearn import linear_model
@@ -119,6 +120,7 @@ def add_candlestick_columns_2(df, toUse):
     df["Body/BodyPP"] = df["Body/BodyP"].shift(1)
     return df
 
+
 def add_candlestick_columns(df, toUse):
     ret = df.apply(lambda row: apply_candle(row, toUse), axis=1)
     ret = create_cols(ret)
@@ -184,6 +186,89 @@ def drop_original_values(df, cross_list):
         del df["High_" + toUse]
         del df["Low_" + toUse]
     return df
+
+
+def der(x):
+    l = x.tolist()
+    values = []
+    acc = 0
+    for index, value in enumerate(l):
+        if index == 0:
+            continue
+        values.append(l[index] - l[index - 1])
+        acc += l[index] - l[index - 1]
+
+    return abs(acc / len(l))
+
+
+def merge_close_values(values):
+    new_values = []
+    values.sort()
+    for index, v in enumerate(values):
+        if index == 0:
+            continue
+        if values[index] - values[index - 1] < 2:
+            new_values = new_values[:-1]
+
+        new_values.append(v)
+    return new_values
+
+
+def sup_and_res(df, target, window = 50):
+    rows = df.shape[0]
+    start = 0
+    done = False
+    while not done:
+        x = df.iloc[start: start + window]
+        res = apply_supp_and_res(x, target)
+        start += 1
+        index = res[0]
+        closest_res = res[1]
+        closest_supp = res[2]
+        if start + window > rows:
+            done = True
+        df.set_value(index, 'closest_res', closest_res)
+        df.set_value(index, 'closest_sup', closest_supp)
+    return df
+
+def apply_supp_and_res(df, target):
+    last_close = df.tail(1)["Close_" + target]
+    index = last_close.index.values[0]
+    last_close = last_close.tolist()[0]
+
+    close = df["Close_" + target]
+
+    close_smooth = close.rolling(window=2).mean()
+
+    d_1 = close_smooth.rolling(window=2).apply(lambda x: der(x))
+    d_2 = close_smooth.rolling(window=3).apply(lambda x: der(x))
+
+    values_1 = d_1.sort_values().index.tolist()[0:5]
+    values_2 = d_2.sort_values().index.tolist()[0:5]
+    values = list(set(values_1 + values_2))
+    values.sort()
+    values = merge_close_values(values)
+
+    real_values = []
+    for v in values:
+        real_values.append(close[v])
+
+    closest_supp = -10000000000
+    closest_res = 1000000000000
+    for v in real_values:
+        # possible res
+        if last_close < v < closest_res:
+            closest_res = v
+        if last_close > v and v > closest_supp:
+            closest_supp = v
+
+    if closest_supp == -10000000000:
+        closest_supp = last_close
+
+    if closest_res == 1000000000000:
+        closest_res = last_close
+
+    return index, closest_res - last_close, closest_supp - last_close
 
 
 def apply_df_test(df, target):
@@ -432,8 +517,8 @@ def apply_bollinger_band(df, column, window=25):
         (df[column].rolling(window=window).mean() + 2.0 * df[column].rolling(window=window).std()) - df[column]
 
     df['bollinger_band_down_' + str(window)] = df[column] - (
-            df[column].rolling(window=window).mean() - 2.0 * df[column].rolling(
-        window=window).std())
+        df[column].rolling(window=window).mean() - 2.0 * df[column].rolling(
+            window=window).std())
 
     # df['bollinger_band_diff_' + str(window)] = df['bollinger_band_up_' + str(window)] - df['bollinger_band_down_' + str(window)]
     return df

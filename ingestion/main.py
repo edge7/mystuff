@@ -16,7 +16,7 @@ from gridSearch.gridSearch import GridSearchCustomModel
 from processing.processing import create_dataframe, drop_column, join_dfs, drop_original_values, \
     apply_macd, apply_bollinger_band, drop_columns, apply_ichimo, apply_stochastic, apply_diff_on, \
     create_target_ahead, AHEAD, apply_momentum, apply_rsi, apply_distance_from_max, apply_distance_from_min, \
-    apply_support_and_resistance, apply_linear_regression
+    apply_support_and_resistance, apply_linear_regression, sup_and_res
 from utility.utility import get_len_dfs
 
 CHANGE_IN_PIPS = 0.0075
@@ -82,6 +82,16 @@ if __name__ == "__main__":
         df = apply_rsi(df, "")
         # Applying MAC
         df = apply_macd(df, 26, 12)
+
+        df = sup_and_res(df)
+        last_close = df.tail(1)["Close_" + "test_create"]
+        last_close = last_close.tolist()[0]
+        c = df.tail(1)["Close_" + "test_create"].tolist()[0]
+        sup = c + df.tail(1)["closest_res" + "test_create"].tolist()[0]
+        res = c + df.tail(1)["closest_sup" + "test_create"].tolist()[0]
+        with open(prefix + "SR" + args.target, 'w') as f:
+            f.write(sup + "\n")
+            f.write(res + "\n")
 
         df = apply_bollinger_band(df, "Close_" + args.target, window=50)
         df = apply_bollinger_band(df, "Close_" + args.target, window=100)

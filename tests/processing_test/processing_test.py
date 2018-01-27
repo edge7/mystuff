@@ -2,11 +2,11 @@ import os
 import statistics
 import pathlib
 
-from ingestion.main import TARGET_VARIABLE
-from processing.processing import create_dataframe, apply_diff, create_y, apply_bollinger_band
+from processing.processing import create_dataframe, apply_diff, create_y, apply_bollinger_band, \
+    apply_supp_and_res, sup_and_res
 
 TESTDATA_FILENAME = os.path.join(os.path.dirname(__file__), 'testdata')
-
+PEAK_FILENAME = os.path.join(os.path.dirname(__file__), 'peakdata')
 
 def get_value_row(d, item):
     return list(d[item])[0]
@@ -118,3 +118,21 @@ def test_bb():
     down = 1000.1 - (mean - 2.0*std)
     assert get_value_row(df.tail(1), 'bollinger_band_up_2') == up
     assert get_value_row(df.tail(1), 'bollinger_band_down_2') == down
+
+
+def test_apply_sr():
+    crossList = ["test_create"]
+    flist = [p for p in pathlib.Path(PEAK_FILENAME).iterdir() if p.is_file()]
+    # Creating n dataframe where n is the number of files
+    dfs = create_dataframe(flist, "Gmt time", crossList)
+    df = dfs[0]
+
+    x = sup_and_res(df, "test_create")
+    print(x)
+    last_close = df.tail(1)["Close_" + "test_create"]
+    index = last_close.index.values[0]
+    last_close = last_close.tolist()[0]
+    c = x.tail(1)["Close_" + "test_create"].tolist()[0]
+    sup = c + x.tail(1)["closest_res"].tolist()[0]
+    res = c + x.tail(1)["closest_sup"].tolist()[0]
+    print("end")
