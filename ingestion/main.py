@@ -17,7 +17,7 @@ from processing.processing import create_dataframe, drop_column, join_dfs, drop_
     apply_macd, apply_bollinger_band, drop_columns, apply_ichimo, apply_stochastic, apply_diff_on, \
     create_target_ahead, AHEAD, apply_momentum, apply_rsi, apply_distance_from_max, apply_distance_from_min, \
     apply_support_and_resistance, apply_linear_regression, sup_and_res, apply_williams, apply_PROC, apply_HeikenAshi, \
-    apply_CCI, applyWCP, apply_GARCH
+    apply_CCI, applyWCP, apply_GARCH, applyFourier
 from utility.utility import get_len_dfs
 
 CHANGE_IN_PIPS = 0.0105
@@ -149,7 +149,11 @@ if __name__ == "__main__":
         #           ---- GARCH ------ #
         df = apply_GARCH(df, args.target, window = 15)
 
-
+        #          ---- FOURIER ----- #
+        df = applyFourier(df, t, window=20)
+        df = applyFourier(df, t, window=50)
+        df = applyFourier(df, t, window=100)
+        df = applyFourier(df, t, window=200)
 
         #df = apply_distance_from_max(df, "Close_" + args.target, window=50)
         #df = apply_distance_from_min(df, "Close_" + args.target, window=50)
@@ -175,6 +179,7 @@ if __name__ == "__main__":
         df = drop_column([df], 'target_in_pips')[0]
         if fs is None:
             fs = FeatureSelection(df, prefix + "_" + args.target)
+
         total_length = df.shape[0]
         start = 0
         train_len = int(args.train_len)
@@ -186,7 +191,7 @@ if __name__ == "__main__":
 
         X_train = train_set_live.ix[:, train_set_live.columns != 'target']
         y_train = train_set_live.ix[:, train_set_live.columns == 'target']
-
+        X_for_col = X_train
         X_test = to_predict.ix[:, to_predict.columns != 'target']
         y_test = to_predict.ix[:, to_predict.columns == 'target']
 
@@ -194,6 +199,39 @@ if __name__ == "__main__":
         sc = StandardScaler()
         X_train = sc.fit_transform(X_train)
         X_test = sc.transform(X_test)
+
+        # Just DO FEATURE SELECTION
+        param_grid_rf = {'n_estimators': [15, 30, 50, 100, 120], 'max_depth': [4, 5, 7, 12, 15]
+                         }
+        gdRf = GridSearchCustomModel(RandomForestClassifier(n_jobs=-1, random_state=42), param_grid_rf)
+        best_models = do_grid_search([gdRf], X_train, y_train.values.ravel(), 0, old_best_models)
+
+        for i in best_models:
+            if "RandomForest" in str(i.best_estimator_):
+                rf = i.best_estimator_
+            feature_import = rf.feature_importances_.tolist()
+            new_list = [(importance, name) for name, importance in zip(X_for_col.columns.tolist(), feature_import)]
+            sorted_by_importance = sorted(new_list, key=lambda tup: tup[0], reverse=True)
+            featureToUse = sorted_by_importance[:20]
+            featureToUse = [ x[1] for x in featureToUse]
+            newDF = df[featureToUse]
+
+        df = newDF
+        df = df.tail(int(args.train_len) + 1).reset_index(drop=True)
+        train_set_live = df.head(int(args.train_len))
+        to_predict = df.tail(1)
+
+        X_train = train_set_live.ix[:, train_set_live.columns != 'target']
+        y_train = train_set_live.ix[:, train_set_live.columns == 'target']
+        X_test = to_predict.ix[:, to_predict.columns != 'target']
+        y_test = to_predict.ix[:, to_predict.columns == 'target']
+
+        # Scaling X
+        sc = StandardScaler()
+        X_train = sc.fit_transform(X_train)
+        X_test = sc.transform(X_test)
+        # END FEATURE SELECTION
+
 
         param_grid_log_reg = {'C': 2.0 ** np.arange(-4, 8)}
         gdLog = GridSearchCustomModel(LogisticRegression(penalty='l1', max_iter=2000, random_state=42),

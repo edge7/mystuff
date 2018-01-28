@@ -432,6 +432,9 @@ def apply_linear_regression(df, target, window=50):
     df["dist_from_lin_reg_" + str(window)] = df[target].rolling(window=window).apply(lambda x: lin_reg_dist(x, window))
     df["dist_from_lin_reg_" + str(window * 2)] = df[target].rolling(window=window * 2).apply(
         lambda x: lin_reg_dist(x, window * 2))
+
+    df["dist_from_lin_reg_" + str(window * 3)] = df[target].rolling(window=window * 3).apply(
+        lambda x: lin_reg_dist(x, window * 3))
     return df
 
 
@@ -511,12 +514,14 @@ def apply_rsi(df, t, window=14):
     df["RSI" + str(window)] = 100.0 - (100 / (1 + (g / l)))
     return df
 
-def apply_CCI(df, t, window = 10):
-    typicalPrice = (df["High_" +t ] + df["Low_" + t] + df["Close_" + t ] ) / 3.0
-    typicalPriceSma = typicalPrice.rolling(window = window).mean()
-    meanDeviation = typicalPrice.rolling(window = window).std()
-    df["CCI"] = (typicalPrice - typicalPriceSma)/ (0.015 * meanDeviation)
+
+def apply_CCI(df, t, window=10):
+    typicalPrice = (df["High_" + t] + df["Low_" + t] + df["Close_" + t]) / 3.0
+    typicalPriceSma = typicalPrice.rolling(window=window).mean()
+    meanDeviation = typicalPrice.rolling(window=window).std()
+    df["CCI"] = (typicalPrice - typicalPriceSma) / (0.015 * meanDeviation)
     return df
+
 
 def apply_HeikenAshi(df, t):
     df["Close_Heiken"] = (df["Open_" + t] + df["High_" + t] + df["Low_" + t] + df["Close_" + t]) / 4.0
@@ -531,6 +536,7 @@ def apply_HeikenAshi(df, t):
     del df["High_Heiken"]
     del df["Low_Heiken"]
     return df
+
 
 def fourier_series_coeff_numpy(f, T, N, return_complex=False):
     """Calculates the first 2*N+1 Fourier series coeff. of a periodic function.
@@ -583,32 +589,68 @@ def fourier_series_coeff_numpy(f, T, N, return_complex=False):
     else:
         y *= 2
         return y[0].real, y[1:-1].real, -y[1:-1].imag
+
+
+def fourierSeries(period, N, toReturn):
+    """Calculate the Fourier series coefficients up to the Nth harmonic"""
+    sin = []
+    cos = []
+    T = len(period)
+    t = np.arange(T)
+    for n in range(N + 1):
+        an = 2 / T * (period * np.cos(2 * np.pi * n * t / T)).sum()
+        bn = 2 / T * (period * np.sin(2 * np.pi * n * t / T)).sum()
+        sin.append(an)
+        cos.append(bn)
+    w = toReturn.split(".")
+
+    if w[0] == "SIN":
+        harmonic = int(w[1])
+        return sin[harmonic]
+
+    if w[1] == "COS":
+        harmonic = int(w[1])
+        return cos[harmonic]
+
+
+def applyFourier(df, t, window = 10):
+    df["SIN_1"] = df["Close_" + t].rolling(window = window).apply(lambda x: fourierSeries(x, 5, "SIN.0"))
+    df["SIN_2"] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "SIN.1"))
+    df["SIN_3"] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "SIN.2"))
+    df["COS_1"] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "COS.0"))
+    df["COS_2"] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "COS.1"))
+    df["COS_3"] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "COS.2"))
+    return df
+
 def garch(x, toReturn):
     model = arch_model(x)
     results = model.fit()
     if toReturn == "mu":
         return results.params["mu"]
     if toReturn == "omega":
-        return  results.params["omega"]
+        return results.params["omega"]
     if toReturn == "alpha":
         return results.params["alpha[1]"]
     if toReturn == "beta":
         return results.params["beta[1]"]
 
 
-def apply_GARCH(df, t, window = 15):
-    df["GARCH_MU"] =  df["Close_" + t].rolling(window = window).apply(lambda  x: garch(x, "mu"))
+def apply_GARCH(df, t, window=15):
+    df["GARCH_MU"] = df["Close_" + t].rolling(window=window).apply(lambda x: garch(x, "mu"))
     df["GARCH_OMEGA"] = df["Close_" + t].rolling(window=window).apply(lambda x: garch(x, "omega"))
     df["GARCH_ALPHA"] = df["Close_" + t].rolling(window=window).apply(lambda x: garch(x, "alpha"))
     df["GARCH_beta"] = df["Close_" + t].rolling(window=window).apply(lambda x: garch(x, "beta"))
     return df
 
+
 def applyWCP(df, t):
-    close = df["Close_" +t]
-    open = df["Open_" +t]
-    low = df["Low_" +t]
+    close = df["Close_" + t]
+    open = df["Open_" + t]
+    low = df["Low_" + t]
     df["WCP"] = close - ((close * 2.0 + open + low) / 4.0)
     return df
+
+
 def apply_macd(df, slow, fast):
     applyTo = "Close"
     for col in df:
