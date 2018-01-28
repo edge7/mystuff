@@ -2,6 +2,7 @@ import random
 
 import pandas as pd
 import matplotlib.pyplot as plt
+from arch import arch_model
 from numpy import nan, array
 import numpy as np
 from sklearn import linear_model
@@ -93,6 +94,30 @@ def apply_low(row, toUse):
     else:
         low_in_pips = close - low
     return low_in_pips
+
+
+def apply_lowH(row, toUse):
+    body = row["BodyInPipsHeiken"]
+    open = row["Open_" + toUse]
+    low = row["Low_" + toUse]
+    close = row["Close_" + toUse]
+    if body > 0:
+        low_in_pips = open - low
+    else:
+        low_in_pips = close - low
+    return low_in_pips
+
+
+def apply_highH(row, toUse):
+    body = row["BodyInPipsHeiken"]
+    open = row["Open_" + toUse]
+    close = row["Close_" + toUse]
+    high = row["High_" + toUse]
+    if body > 0:
+        high_in_pips = high - close
+    else:
+        high_in_pips = high - open
+    return high_in_pips
 
 
 def apply_high(row, toUse):
@@ -214,7 +239,7 @@ def merge_close_values(values):
     return new_values
 
 
-def sup_and_res(df, target, window = 30):
+def sup_and_res(df, target, window=30):
     rows = df.shape[0]
     start = 0
     done = False
@@ -231,6 +256,7 @@ def sup_and_res(df, target, window = 30):
         df.set_value(index, 'closest_sup', closest_supp)
         df.set_value(index, 'diff_clos_sup', closest_supp - closest_res)
     return df
+
 
 def apply_supp_and_res(df, target):
     last_close = df.tail(1)["Close_" + target]
@@ -290,7 +316,7 @@ def create_dataframe(flist, excluded, crossList, keep_names=True):
         for i in cols:
             if i == "Gmt time":
                 continue
-            #df[i] = df[i].rolling(window = 2).mean()
+                # df[i] = df[i].rolling(window = 2).mean()
         df['Gmt time'] = df['Gmt time'].apply(lambda x: x.replace(",", " "))
         # df = df.head(75).reset_index()
         if 'Volume' in df:
@@ -312,6 +338,14 @@ def momentum(x):
 def apply_momentum(df, target, window=8):
     df['momentum_' + str(window)] = df[target].rolling(window=window).apply(lambda x: momentum(x))
     return df
+
+
+def PROC(x):
+    return x[-1] - x[0]
+
+
+def apply_PROC(df, target, window=10):
+    df["PROC_" + str(window)] = df[target].rolling(window=window).apply(lambda x: PROC(x))
 
 
 def apply_distance_from_min(df, target, window=50):
@@ -428,18 +462,30 @@ def create_target_ahead(df, CLOSE_VARIABLE, AHEAD, threshold):
     return df
 
 
-def apply_stochastic(df, t):
+def apply_williams(df, t, window=14):
     for col in df:
         if 'High_' + t == col:
-            high14 = df[col].rolling(window=14).max()
+            high = df[col].rolling(window=window).max()
         if 'Low_' + t == col:
-            low14 = df[col].rolling(window=14).min()
+            low = df[col].rolling(window=window).min()
 
-    fast_stoc = 100.0 * (df["Close_" + t] - low14) / (high14 - low14)
-    slow_stoc = fast_stoc.rolling(window=3).mean()
+    df["Williams_" + str(window)] = -100.0 * (high - df["Close_" + t]) / (high - low)
+    return df
+
+
+def apply_stochastic(df, t, window=14, mean=3):
+    for col in df:
+        if 'High_' + t == col:
+            high = df[col].rolling(window=window).max()
+        if 'Low_' + t == col:
+            low = df[col].rolling(window=window).min()
+
+    fast_stoc = 100.0 * (df["Close_" + t] - low) / (high - low)
+    slow_stoc = fast_stoc.rolling(window=mean).mean()
     df["fast_stoc"] = fast_stoc
-    df["slow_stoc"] = slow_stoc
-    df["fast-slow_stoc"] = fast_stoc - slow_stoc
+    if mean != 1:
+        df["slow_stoc"] = slow_stoc
+    # df["fast-slow_stoc"] = fast_stoc - slow_stoc
     return df
 
 
@@ -465,13 +511,110 @@ def apply_rsi(df, t, window=14):
     df["RSI" + str(window)] = 100.0 - (100 / (1 + (g / l)))
     return df
 
+def apply_CCI(df, t, window = 10):
+    typicalPrice = (df["High_" +t ] + df["Low_" + t] + df["Close_" + t ] ) / 3.0
+    typicalPriceSma = typicalPrice.rolling(window = window).mean()
+    meanDeviation = typicalPrice.rolling(window = window).std()
+    df["CCI"] = (typicalPrice - typicalPriceSma)/ (0.015 * meanDeviation)
+    return df
 
+def apply_HeikenAshi(df, t):
+    df["Close_Heiken"] = (df["Open_" + t] + df["High_" + t] + df["Low_" + t] + df["Close_" + t]) / 4.0
+    df["Open_Heiken"] = (df["Open_" + t].shift(1) + df["Close_" + t].shift(1)) / 2.0
+    df["High_Heiken"] = df[["Close_" + t, "Open_Heiken", "High_" + t]].max(axis=1)
+    df["Low_Heiken"] = df[["Low_" + t, "Open_Heiken", "High_Heiken"]].min(axis=1)
+    df["BodyInPipsHeiken"] = - df["Open_Heiken"] + df["Close_Heiken"]
+    df["LowInPips"] = df.apply(lambda row: apply_lowH(row, "Heiken"), axis=1)
+    df["HighInPips"] = df.apply(lambda row: apply_highH(row, "Heiken"), axis=1)
+    del df["Close_Heiken"]
+    del df["Open_Heiken"]
+    del df["High_Heiken"]
+    del df["Low_Heiken"]
+    return df
+
+def fourier_series_coeff_numpy(f, T, N, return_complex=False):
+    """Calculates the first 2*N+1 Fourier series coeff. of a periodic function.
+
+    Given a periodic, function f(t) with period T, this function returns the
+    coefficients a0, {a1,a2,...},{b1,b2,...} such that:
+
+    f(t) ~= a0/2+ sum_{k=1}^{N} ( a_k*cos(2*pi*k*t/T) + b_k*sin(2*pi*k*t/T) )
+
+    If return_complex is set to True, it returns instead the coefficients
+    {c0,c1,c2,...}
+    such that:
+
+    f(t) ~= sum_{k=-N}^{N} c_k * exp(i*2*pi*k*t/T)
+
+    where we define c_{-n} = complex_conjugate(c_{n})
+
+    Refer to wikipedia for the relation between the real-valued and complex
+    valued coeffs at http://en.wikipedia.org/wiki/Fourier_series.
+
+    Parameters
+    ----------
+    f : the periodic function, a callable like f(t)
+    T : the period of the function f, so that f(0)==f(T)
+    N_max : the function will return the first N_max + 1 Fourier coeff.
+
+    Returns
+    -------
+    if return_complex == False, the function returns:
+
+    a0 : float
+    a,b : numpy float arrays describing respectively the cosine and sine coeff.
+
+    if return_complex == True, the function returns:
+
+    c : numpy 1-dimensional complex-valued array of size N+1
+
+    """
+    # From Shanon theoreom we must use a sampling freq. larger than the maximum
+    # frequency you want to catch in the signal.
+    f_sample = 2 * N
+    # we also need to use an integer sampling frequency, or the
+    # points will not be equispaced between 0 and 1. We then add +2 to f_sample
+    t, dt = np.linspace(0, T, f_sample + 2, endpoint=False, retstep=True)
+
+    y = np.fft.rfft(f(t)) / t.size
+
+    if return_complex:
+        return y
+    else:
+        y *= 2
+        return y[0].real, y[1:-1].real, -y[1:-1].imag
+def garch(x, toReturn):
+    model = arch_model(x)
+    results = model.fit()
+    if toReturn == "mu":
+        return results.params["mu"]
+    if toReturn == "omega":
+        return  results.params["omega"]
+    if toReturn == "alpha":
+        return results.params["alpha[1]"]
+    if toReturn == "beta":
+        return results.params["beta[1]"]
+
+
+def apply_GARCH(df, t, window = 15):
+    df["GARCH_MU"] =  df["Close_" + t].rolling(window = window).apply(lambda  x: garch(x, "mu"))
+    df["GARCH_OMEGA"] = df["Close_" + t].rolling(window=window).apply(lambda x: garch(x, "omega"))
+    df["GARCH_ALPHA"] = df["Close_" + t].rolling(window=window).apply(lambda x: garch(x, "alpha"))
+    df["GARCH_beta"] = df["Close_" + t].rolling(window=window).apply(lambda x: garch(x, "beta"))
+    return df
+
+def applyWCP(df, t):
+    close = df["Close_" +t]
+    open = df["Open_" +t]
+    low = df["Low_" +t]
+    df["WCP"] = close - ((close * 2.0 + open + low) / 4.0)
+    return df
 def apply_macd(df, slow, fast):
     applyTo = "Close"
     for col in df:
         if applyTo in col and 'adf' not in col:
             macd_line = df[col].rolling(window=fast).mean() - df[col].rolling(window=slow).mean()
-            signal_line = macd_line.rolling(window=9).mean()
+            signal_line = macd_line.rolling(window=15).mean()
             macd_hist = macd_line - signal_line
             df[col + "_macdline"] = macd_line
             # df[col + "_signalline"] = signal_line

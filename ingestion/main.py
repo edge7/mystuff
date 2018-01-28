@@ -16,7 +16,8 @@ from gridSearch.gridSearch import GridSearchCustomModel
 from processing.processing import create_dataframe, drop_column, join_dfs, drop_original_values, \
     apply_macd, apply_bollinger_band, drop_columns, apply_ichimo, apply_stochastic, apply_diff_on, \
     create_target_ahead, AHEAD, apply_momentum, apply_rsi, apply_distance_from_max, apply_distance_from_min, \
-    apply_support_and_resistance, apply_linear_regression, sup_and_res
+    apply_support_and_resistance, apply_linear_regression, sup_and_res, apply_williams, apply_PROC, apply_HeikenAshi, \
+    apply_CCI, applyWCP, apply_GARCH
 from utility.utility import get_len_dfs
 
 CHANGE_IN_PIPS = 0.0105
@@ -75,13 +76,10 @@ if __name__ == "__main__":
         # Inner join on GMT time
         df = join_dfs(dfs, "Gmt time")
 
-        df = apply_ichimo(df, args.target)
+        #df = apply_ichimo(df, args.target)
 
-        df = apply_stochastic(df, args.target)
 
         df = apply_rsi(df, "")
-        # Applying MAC
-        df = apply_macd(df, 26, 12)
 
         df = sup_and_res(df, args.target, window=100)
         last_close = df.tail(1)["Close_" + args.target]
@@ -90,17 +88,71 @@ if __name__ == "__main__":
         sup = c + df.tail(1)["closest_sup"].tolist()[0]
         res = c + df.tail(1)["closest_res"].tolist()[0]
         with open(prefix + "SR" + args.target, 'w') as f:
-            f.write(str(sup) + "\n" + (str(res) + "\n" ))
+            f.write(str(sup) + "\n" + (str(res) + "\n"))
 
+
+        #df = apply_support_and_resistance(df, args.target)
+        df = apply_diff_on(df, ["Volume_" + args.target])
+
+        #           ---- Momentum ---- #
+        df = apply_momentum(df, "Close_" + args.target, window=5)
+        df = apply_momentum(df, "Close_" + args.target, window=4)
+        df = apply_momentum(df, "Close_" + args.target, window=3)
+        df = apply_momentum(df, "Close_" + args.target, window=10)
+        df = apply_momentum(df, "Close_" + args.target, window=9)
+        df = apply_momentum(df, "Close_" + args.target, window=8)
+
+        #           ---- Stochastic ---- #
+        df = apply_stochastic(df, args.target, window=5, mean=1)
+        df = apply_stochastic(df, args.target, window=4, mean=1)
+        df = apply_stochastic(df, args.target, window=3, mean=1)
+        df = apply_stochastic(df, args.target, window=5, mean=2)
+        df = apply_stochastic(df, args.target, window=4, mean=2)
+        df = apply_stochastic(df, args.target, window=3, mean=2)
+        df = apply_stochastic(df, args.target, window=10, mean=1)
+        df = apply_stochastic(df, args.target, window=9, mean=1)
+        df = apply_stochastic(df, args.target, window=8, mean=1)
+        df = apply_stochastic(df, args.target, window=10, mean=2)
+        df = apply_stochastic(df, args.target, window=9, mean=2)
+        df = apply_stochastic(df, args.target, window=8, mean=2)
+
+        #           ---- Williams ---- #
+        df = apply_williams(df, args.target, window = 10)
+        df = apply_williams(df, args.target, window=9)
+        df = apply_williams(df, args.target, window=8)
+        df = apply_williams(df, args.target, window=7)
+        df = apply_williams(df, args.target, window=6)
+
+        #           ---- Williams ---- #
+        df = apply_PROC(df, args.target, window=15)
+        df = apply_PROC(df, args.target, window=14)
+        df = apply_PROC(df, args.target, window=13)
+        df = apply_PROC(df, args.target, window=12)
+
+        #           ---- Applying MACD ---#
+        df = apply_macd(df, 26, 12)
+
+        #           ---- Bollinger Band ---- #
         df = apply_bollinger_band(df, "Close_" + args.target, window=50)
         df = apply_bollinger_band(df, "Close_" + args.target, window=100)
+        df = apply_bollinger_band(df, "Close_" + args.target, window=15)
 
-        df = apply_support_and_resistance(df, args.target)
-        df = apply_diff_on(df, ["Volume_" + args.target])
-        df = apply_momentum(df, "Close_" + args.target, window=10)
+        #           ----  Heiken Ashi
+        df = apply_HeikenAshi(df, args.target)
 
-        df = apply_distance_from_max(df, "Close_" + args.target, window=50)
-        df = apply_distance_from_min(df, "Close_" + args.target, window=50)
+        #           ----  CCI ------ #
+        df = apply_CCI(df, args.target, window = 15)
+
+        #           ----  WCP ------ #
+        df = applyWCP(df, args.target)
+
+        #           ---- GARCH ------ #
+        df = apply_GARCH(df, args.target, window = 15)
+
+
+
+        #df = apply_distance_from_max(df, "Close_" + args.target, window=50)
+        #df = apply_distance_from_min(df, "Close_" + args.target, window=50)
         df = apply_linear_regression(df, "Close_" + args.target, window=75)
 
         df = create_target_ahead(df, "Close_" + args.target, AHEAD, CHANGE_IN_PIPS)
@@ -181,7 +233,6 @@ if __name__ == "__main__":
                 f.write("HOLD")
             continue
 
-
         tp = df_prediction.tail(1)
         gmt = tp['Gmt time']
         m = [(str(model.best_estimator_), model.best_estimator_) for model in best_models]
@@ -191,9 +242,9 @@ if __name__ == "__main__":
         print("vot")
         print(res)
         print(voting_classifier.predict_proba(X_test)[0])
-        #print(m[0][0])
-        #print(m[0][1].predict_proba(X_test)[0])
-        #print(m[1][1].predict_proba(X_test)[0])
+        # print(m[0][0])
+        # print(m[0][1].predict_proba(X_test)[0])
+        # print(m[1][1].predict_proba(X_test)[0])
         with open(result_file, 'w') as f:
             f.write(res)
 
