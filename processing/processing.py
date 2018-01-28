@@ -646,7 +646,7 @@ def apply_GARCH(df, t, window=15):
 def applyWCP(df, t):
     close = df["Close_" + t]
     open = df["Open_" + t]
-    low = df["Low_" + t]
+    low = df ["Low_" + t]
     df["WCP"] = close - ((close * 2.0 + open + low) / 4.0)
     return df
 
