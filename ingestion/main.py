@@ -213,8 +213,11 @@ if __name__ == "__main__":
             new_list = [(importance, name) for name, importance in zip(X_for_col.columns.tolist(), feature_import)]
             sorted_by_importance = sorted(new_list, key=lambda tup: tup[0], reverse=True)
             featureToUse = sorted_by_importance[:20]
-            featureToUse = [ x[1] for x in featureToUse]
+            with open(prefix + "FS" + args.target, 'a') as f:
+                f.write(str(featureToUse) + "\n")
+            featureToUse = [x[1] for x in featureToUse]
             newDF = df[featureToUse]
+
 
         df = newDF
         df = df.tail(int(args.train_len) + 1).reset_index(drop=True)
