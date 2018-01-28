@@ -345,8 +345,8 @@ def PROC(x):
 
 
 def apply_PROC(df, target, window=10):
-    df["PROC_" + str(window)] = df[target].rolling(window=window).apply(lambda x: PROC(x))
-
+    df["PROC_" + str(window)] = df["Close_" + target].rolling(window=window).apply(lambda x: PROC(x))
+    return df
 
 def apply_distance_from_min(df, target, window=50):
     df['dist_from_min_' + str(window)] = df[target] - df[target].rolling(window=window).apply(lambda x: np.min(x))
@@ -636,7 +636,7 @@ def garch(x, toReturn):
 
 
 def apply_GARCH(df, t, window=15):
-    df["GARCH_MU"] = df["Close_" + t].rolling(window=window).apply(lambda x: garch(x, "mu"))
+    df["GARCH_MU"] = df["Close_" + t] - df["Close_" + t].rolling(window=window).apply(lambda x: garch(x, "mu"))
     df["GARCH_OMEGA"] = df["Close_" + t].rolling(window=window).apply(lambda x: garch(x, "omega"))
     df["GARCH_ALPHA"] = df["Close_" + t].rolling(window=window).apply(lambda x: garch(x, "alpha"))
     df["GARCH_beta"] = df["Close_" + t].rolling(window=window).apply(lambda x: garch(x, "beta"))

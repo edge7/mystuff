@@ -150,10 +150,10 @@ if __name__ == "__main__":
         df = apply_GARCH(df, args.target, window = 15)
 
         #          ---- FOURIER ----- #
-        df = applyFourier(df, t, window=20)
-        df = applyFourier(df, t, window=50)
-        df = applyFourier(df, t, window=100)
-        df = applyFourier(df, t, window=200)
+        df = applyFourier(df, args.target, window=20)
+        df = applyFourier(df, args.target, window=50)
+        df = applyFourier(df, args.target, window=100)
+        df = applyFourier(df, args.target, window=200)
 
         #df = apply_distance_from_max(df, "Close_" + args.target, window=50)
         #df = apply_distance_from_min(df, "Close_" + args.target, window=50)
