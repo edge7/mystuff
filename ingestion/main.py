@@ -19,7 +19,7 @@ from processing.processing import create_dataframe, drop_column, join_dfs, drop_
     apply_support_and_resistance, apply_linear_regression, sup_and_res
 from utility.utility import get_len_dfs
 
-CHANGE_IN_PIPS = 0.0075
+CHANGE_IN_PIPS = 0.0105
 crossList = []
 prefix = "C:\\Users\\Administrator\\AppData\\Roaming\\MetaQuotes\\Terminal\\1DAFD9A7C67DC84FE37EAA1FC1E5CF75\\tester\\files\\"
 
@@ -83,15 +83,14 @@ if __name__ == "__main__":
         # Applying MAC
         df = apply_macd(df, 26, 12)
 
-        df = sup_and_res(df)
-        last_close = df.tail(1)["Close_" + "test_create"]
+        df = sup_and_res(df, args.target, window=100)
+        last_close = df.tail(1)["Close_" + args.target]
         last_close = last_close.tolist()[0]
-        c = df.tail(1)["Close_" + "test_create"].tolist()[0]
-        sup = c + df.tail(1)["closest_res" + "test_create"].tolist()[0]
-        res = c + df.tail(1)["closest_sup" + "test_create"].tolist()[0]
+        c = df.tail(1)["Close_" + args.target].tolist()[0]
+        sup = c + df.tail(1)["closest_sup"].tolist()[0]
+        res = c + df.tail(1)["closest_res"].tolist()[0]
         with open(prefix + "SR" + args.target, 'w') as f:
-            f.write(str(sup) + "\n")
-            f.write(str(res) + "\n")
+            f.write(str(sup) + "\n" + (str(res) + "\n" ))
 
         df = apply_bollinger_band(df, "Close_" + args.target, window=50)
         df = apply_bollinger_band(df, "Close_" + args.target, window=100)
@@ -165,7 +164,7 @@ if __name__ == "__main__":
 
         gdGB = GridSearchCustomModel(GradientBoostingClassifier(random_state=42, max_features='auto'), param_grid_GB)
         try:
-            best_models = do_grid_search([gdRf, gdGB], X_train, y_train.values.ravel(), 0, old_best_models)
+            best_models = do_grid_search([gdRf], X_train, y_train.values.ravel(), 0, old_best_models)
             for i in best_models:
                 if "RandomForest" in str(i.best_estimator_):
                     rf = i.best_estimator_
@@ -192,9 +191,9 @@ if __name__ == "__main__":
         print("vot")
         print(res)
         print(voting_classifier.predict_proba(X_test)[0])
-        print(m[0][0])
-        print(m[0][1].predict_proba(X_test)[0])
-        print(m[1][1].predict_proba(X_test)[0])
+        #print(m[0][0])
+        #print(m[0][1].predict_proba(X_test)[0])
+        #print(m[1][1].predict_proba(X_test)[0])
         with open(result_file, 'w') as f:
             f.write(res)
 

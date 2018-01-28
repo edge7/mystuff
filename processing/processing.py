@@ -214,7 +214,7 @@ def merge_close_values(values):
     return new_values
 
 
-def sup_and_res(df, target, window = 50):
+def sup_and_res(df, target, window = 30):
     rows = df.shape[0]
     start = 0
     done = False
@@ -229,6 +229,7 @@ def sup_and_res(df, target, window = 50):
             done = True
         df.set_value(index, 'closest_res', closest_res)
         df.set_value(index, 'closest_sup', closest_supp)
+        df.set_value(index, 'diff_clos_sup', closest_supp - closest_res)
     return df
 
 def apply_supp_and_res(df, target):
@@ -259,7 +260,7 @@ def apply_supp_and_res(df, target):
         # possible res
         if last_close < v < closest_res:
             closest_res = v
-        if last_close > v and v > closest_supp:
+        if last_close > v > closest_supp:
             closest_supp = v
 
     if closest_supp == -10000000000:
@@ -267,7 +268,8 @@ def apply_supp_and_res(df, target):
 
     if closest_res == 1000000000000:
         closest_res = last_close
-
+    assert closest_res >= last_close
+    assert closest_supp <= last_close
     return index, closest_res - last_close, closest_supp - last_close
 
 
@@ -284,9 +286,11 @@ def create_dataframe(flist, excluded, crossList, keep_names=True):
         df = pd.read_csv(str(path), delimiter=";")
         if 'Adj Close' in df:
             del df['Adj Close']
-        # cols = list(df.columns.values)
-        # for i in cols:
-        #    df[i] = pd.to_numeric(df[i], errors='ignore')
+        cols = list(df.columns.values)
+        for i in cols:
+            if i == "Gmt time":
+                continue
+            #df[i] = df[i].rolling(window = 2).mean()
         df['Gmt time'] = df['Gmt time'].apply(lambda x: x.replace(",", " "))
         # df = df.head(75).reset_index()
         if 'Volume' in df:
