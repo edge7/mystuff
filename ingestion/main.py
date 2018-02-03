@@ -2,7 +2,7 @@ import argparse
 import os
 import pathlib
 import time
-
+import math
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.ensemble import VotingClassifier
@@ -17,10 +17,10 @@ from processing.processing import create_dataframe, drop_column, join_dfs, drop_
     apply_macd, apply_bollinger_band, drop_columns, apply_ichimo, apply_stochastic, apply_diff_on, \
     create_target_ahead, AHEAD, apply_momentum, apply_rsi, apply_distance_from_max, apply_distance_from_min, \
     apply_support_and_resistance, apply_linear_regression, sup_and_res, apply_williams, apply_PROC, apply_HeikenAshi, \
-    apply_CCI, applyWCP, apply_GARCH, applyFourier
+    apply_CCI, applyWCP, applyFourier, apply_diff, apply_poly
 from utility.utility import get_len_dfs
 
-CHANGE_IN_PIPS = 0.0105
+CHANGE_IN_PIPS = 0.009101
 crossList = []
 prefix = "C:\\Users\\Administrator\\AppData\\Roaming\\MetaQuotes\\Terminal\\1DAFD9A7C67DC84FE37EAA1FC1E5CF75\\tester\\files\\"
 
@@ -40,6 +40,9 @@ if __name__ == "__main__":
     counter = 0
     crossList.append(args.target)
     old_best_models = None
+    old_best_models_ = None
+
+    RETRAIN = 0
     fs = None
     fs_counter = 0
     # Infinite loop
@@ -49,19 +52,20 @@ if __name__ == "__main__":
         while not os.path.isfile(notification_file):
             time.sleep(1)
 
-        # res = "HOLD"
-        # if counter != 0:
-        #      counter += 1
-        #      counter %= AHEAD
-        #      lines = []
-        #      with open(data_file, 'r') as f:
-        #          lines = f.readlines()
-        #      with open(data_file, 'w') as f:
-        #          f.writelines(lines[:1] + lines[2:])
-        # #     with open(result_file, 'w') as f:
-        # #         f.write(res)
-        # #     os.remove(notification_file)
-        # #     continue
+        res = "HOLD"
+        if counter != 0:
+              counter += 1
+              counter %= round(AHEAD / 3)
+              RETRAIN +=1
+              # lines = []
+              # with open(data_file, 'r') as f:
+              #     lines = f.readlines()
+              # with open(data_file, 'w') as f:
+              #     f.writelines(lines[:1] + lines[2:])
+              with open(result_file, 'w') as f:
+                 f.write(res)
+              os.remove(notification_file)
+              continue
 
         flist = [pathlib.Path(data_file)]
 
@@ -76,8 +80,7 @@ if __name__ == "__main__":
         # Inner join on GMT time
         df = join_dfs(dfs, "Gmt time")
 
-        #df = apply_ichimo(df, args.target)
-
+        df = apply_ichimo(df, args.target)
 
         df = apply_rsi(df, "")
 
@@ -90,40 +93,45 @@ if __name__ == "__main__":
         with open(prefix + "SR" + args.target, 'w') as f:
             f.write(str(sup) + "\n" + (str(res) + "\n"))
 
+        df = apply_support_and_resistance(df, args.target)
+        df = apply_support_and_resistance(df, args.target, window=50)
+        df = apply_support_and_resistance(df, args.target, window=100)
+        df = apply_support_and_resistance(df, args.target, window=25)
+        df = apply_support_and_resistance(df, args.target, window=200)
 
-        #df = apply_support_and_resistance(df, args.target)
         df = apply_diff_on(df, ["Volume_" + args.target])
 
         #           ---- Momentum ---- #
         df = apply_momentum(df, "Close_" + args.target, window=5)
         df = apply_momentum(df, "Close_" + args.target, window=4)
-        df = apply_momentum(df, "Close_" + args.target, window=3)
+        df = apply_momentum(df, "Close_" + args.target, window=50)
         df = apply_momentum(df, "Close_" + args.target, window=10)
         df = apply_momentum(df, "Close_" + args.target, window=9)
-        df = apply_momentum(df, "Close_" + args.target, window=8)
+        df = apply_momentum(df, "Close_" + args.target, window=25)
+        df = apply_momentum(df, "Close_" + args.target, window=100)
 
         #           ---- Stochastic ---- #
         df = apply_stochastic(df, args.target, window=5, mean=1)
         df = apply_stochastic(df, args.target, window=4, mean=1)
         df = apply_stochastic(df, args.target, window=3, mean=1)
         df = apply_stochastic(df, args.target, window=5, mean=2)
-        df = apply_stochastic(df, args.target, window=4, mean=2)
+        df = apply_stochastic(df, args.target, window=50, mean=5)
         df = apply_stochastic(df, args.target, window=3, mean=2)
         df = apply_stochastic(df, args.target, window=10, mean=1)
         df = apply_stochastic(df, args.target, window=9, mean=1)
-        df = apply_stochastic(df, args.target, window=8, mean=1)
-        df = apply_stochastic(df, args.target, window=10, mean=2)
-        df = apply_stochastic(df, args.target, window=9, mean=2)
+        df = apply_stochastic(df, args.target, window=80, mean=1)
+        df = apply_stochastic(df, args.target, window=200, mean=20)
+        df = apply_stochastic(df, args.target, window=400, mean=25)
         df = apply_stochastic(df, args.target, window=8, mean=2)
 
         #           ---- Williams ---- #
-        df = apply_williams(df, args.target, window = 10)
+        df = apply_williams(df, args.target, window=10)
         df = apply_williams(df, args.target, window=9)
         df = apply_williams(df, args.target, window=8)
         df = apply_williams(df, args.target, window=7)
         df = apply_williams(df, args.target, window=6)
 
-        #           ---- Williams ---- #
+        #           ---- PROC ---- #
         df = apply_PROC(df, args.target, window=15)
         df = apply_PROC(df, args.target, window=14)
         df = apply_PROC(df, args.target, window=13)
@@ -141,24 +149,34 @@ if __name__ == "__main__":
         df = apply_HeikenAshi(df, args.target)
 
         #           ----  CCI ------ #
-        df = apply_CCI(df, args.target, window = 15)
+        df = apply_CCI(df, args.target, window=15)
 
         #           ----  WCP ------ #
         df = applyWCP(df, args.target)
 
         #           ---- GARCH ------ #
-        df = apply_GARCH(df, args.target, window = 15)
+        #df = apply_GARCH(df, args.target, window=5)
+        #df = apply_GARCH(df, args.target, window=10)
+        #df = apply_GARCH(df, args.target, window=60)
 
         #          ---- FOURIER ----- #
         df = applyFourier(df, args.target, window=20)
-        df = applyFourier(df, args.target, window=50)
-        df = applyFourier(df, args.target, window=100)
-        df = applyFourier(df, args.target, window=200)
+        df = applyFourier(df, args.target, window=15)
+        df = applyFourier(df, args.target, window=10)
 
-        #df = apply_distance_from_max(df, "Close_" + args.target, window=50)
-        #df = apply_distance_from_min(df, "Close_" + args.target, window=50)
+        df = apply_poly(df, args.target, windows = 5)
+        df = apply_poly(df, args.target, windows =10)
+        df = apply_poly(df, args.target, windows=50)
+        df = apply_poly(df, args.target, windows=100)
+        df = apply_poly(df, args.target, windows=200)
+
+        df = apply_distance_from_max(df, "Close_" + args.target, window=500)
+        df = apply_distance_from_min(df, "Close_" + args.target, window=500)
         df = apply_linear_regression(df, "Close_" + args.target, window=75)
+        df = apply_linear_regression(df, "Close_" + args.target, window=250)
+        df = apply_linear_regression(df, "Close_" + args.target, window=125)
 
+        df = apply_diff(df, ["Gmt time"])
         df = create_target_ahead(df, "Close_" + args.target, AHEAD, CHANGE_IN_PIPS)
 
         df['target_in_pips'] = df["Close_" + args.target].diff().shift(-1)
@@ -204,20 +222,19 @@ if __name__ == "__main__":
         param_grid_rf = {'n_estimators': [15, 30, 50, 100, 120], 'max_depth': [4, 5, 7, 12, 15]
                          }
         gdRf = GridSearchCustomModel(RandomForestClassifier(n_jobs=-1, random_state=42), param_grid_rf)
-        best_models = do_grid_search([gdRf], X_train, y_train.values.ravel(), 0, old_best_models)
-
-        for i in best_models:
+        best_models_ = do_grid_search([gdRf], X_train, y_train.values.ravel(), 100, old_best_models_, prefix, args.target)
+        old_best_models_ = best_models_
+        for i in best_models_:
             if "RandomForest" in str(i.best_estimator_):
                 rf = i.best_estimator_
             feature_import = rf.feature_importances_.tolist()
             new_list = [(importance, name) for name, importance in zip(X_for_col.columns.tolist(), feature_import)]
             sorted_by_importance = sorted(new_list, key=lambda tup: tup[0], reverse=True)
-            featureToUse = sorted_by_importance[:20]
+            featureToUse = sorted_by_importance[:round(math.sqrt(int(args.train_len) * 2))]
             with open(prefix + "FS" + args.target, 'a') as f:
                 f.write(str(featureToUse) + "\n")
             featureToUse = [x[1] for x in featureToUse]
-            newDF = df[featureToUse]
-
+            newDF = df[featureToUse + ["target"]]
 
         df = newDF
         df = df.tail(int(args.train_len) + 1).reset_index(drop=True)
@@ -234,7 +251,6 @@ if __name__ == "__main__":
         X_train = sc.fit_transform(X_train)
         X_test = sc.transform(X_test)
         # END FEATURE SELECTION
-
 
         param_grid_log_reg = {'C': 2.0 ** np.arange(-4, 8)}
         gdLog = GridSearchCustomModel(LogisticRegression(penalty='l1', max_iter=2000, random_state=42),
@@ -257,11 +273,11 @@ if __name__ == "__main__":
 
         gdGB = GridSearchCustomModel(GradientBoostingClassifier(random_state=42, max_features='auto'), param_grid_GB)
         try:
-            best_models = do_grid_search([gdRf], X_train, y_train.values.ravel(), 0, old_best_models)
+            best_models = do_grid_search([gdRf], X_train, y_train.values.ravel(), 10000, old_best_models, prefix, args.target)
             for i in best_models:
                 if "RandomForest" in str(i.best_estimator_):
                     rf = i.best_estimator_
-            fs.write_feature_importance(rf)
+            fs.write_feature_importance(rf, featureToUse)
             fs_counter += 1
         except Exception as e:
             print(e)
@@ -273,6 +289,8 @@ if __name__ == "__main__":
             with open(result_file, 'w') as f:
                 f.write("HOLD")
             continue
+        RETRAIN = RETRAIN % 30
+        RETRAIN +=1
 
         tp = df_prediction.tail(1)
         gmt = tp['Gmt time']
@@ -283,9 +301,8 @@ if __name__ == "__main__":
         print("vot")
         print(res)
         print(voting_classifier.predict_proba(X_test)[0])
-        # print(m[0][0])
-        # print(m[0][1].predict_proba(X_test)[0])
-        # print(m[1][1].predict_proba(X_test)[0])
+        print(m[0][0])
+        print(m[0][1].predict_proba(X_test)[0])
         with open(result_file, 'w') as f:
             f.write(res)
 
@@ -297,6 +314,6 @@ if __name__ == "__main__":
             fs.consolidate_feature_importance()
 
         counter += 1
-        counter %= AHEAD
+        counter %= round(AHEAD / 3)
 
     print('end')

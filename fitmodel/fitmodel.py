@@ -10,7 +10,7 @@ def fit_models(list_models, X, y):
     return list_models
 
 
-def do_grid_search(list_models, X, y, counter, old_best_models):
+def do_grid_search(list_models, X, y, counter, old_best_models, prefix = None, t =None):
     to_return = []
     print("Shape X \n")
     print(X.shape)
@@ -19,7 +19,7 @@ def do_grid_search(list_models, X, y, counter, old_best_models):
     c = -1
     for model in list_models:
         c += 1
-        if counter != 0:
+        if counter < 29 and old_best_models is not None:
             to_return.append(old_best_models[c])
             print("\n\n ***** NO MODEL GENERATED: " + str(model.model)[0:10]  + "\n")
             continue
@@ -39,6 +39,12 @@ def do_grid_search(list_models, X, y, counter, old_best_models):
         print(clf.best_params_)
         print(" Print best score \n")
         print(clf.best_score_)
+        if prefix is not None:
+            with open(prefix + "_" + t + "_SCORE", 'a') as f:
+                f.write("\n *** " + str(clf.best_score_))
+                f.write("\nShape X \n")
+                f.write(str(X.shape))
+
         to_return.append(clf)
 
     return to_return

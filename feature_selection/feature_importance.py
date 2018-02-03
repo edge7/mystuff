@@ -5,9 +5,9 @@ class FeatureSelection(object):
         self.cols.remove("target")
         self.feature_importance = {}
 
-    def write_feature_importance(self, model):
+    def write_feature_importance(self, model, newCol):
         feature_import = model.feature_importances_.tolist()
-        new_list = [(importance, name) for name, importance in zip(self.cols, feature_import)]
+        new_list = [(importance, name) for name, importance in zip(newCol, feature_import)]
         sorted_by_importance = sorted(new_list, key=lambda tup: tup[0], reverse=True)
         for importance, name in sorted_by_importance:
             res = self.feature_importance.get(name, [])
