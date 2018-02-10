@@ -10,7 +10,7 @@ from sklearn import linear_model
 from algos.algos import adf
 
 THRESHOLD = 0
-AHEAD = 64
+AHEAD = 24
 
 
 def apply_candle(row, toUse):
@@ -270,8 +270,8 @@ def apply_supp_and_res(df, target):
     d_1 = close_smooth.rolling(window=2).apply(lambda x: der(x))
     d_2 = close_smooth.rolling(window=3).apply(lambda x: der(x))
 
-    values_1 = d_1.sort_values().index.tolist()[0:5]
-    values_2 = d_2.sort_values().index.tolist()[0:5]
+    values_1 = d_1.sort_values().index.tolist()[0:10]
+    values_2 = d_2.sort_values().index.tolist()[0:10]
     values = list(set(values_1 + values_2))
     values.sort()
     values = merge_close_values(values)
@@ -300,8 +300,9 @@ def apply_supp_and_res(df, target):
 
 
 def apply_df_test(df, target):
-    df[target + 'adf_50'] = df[target].rolling(window=50).apply(lambda x: adf(x))
-    df[target + 'adf_100'] = df[target].rolling(window=100).apply(lambda x: adf(x))
+    df["Close_" + target + 'adf_100'] = df["Close_" + target].rolling(window=100).apply(lambda x: adf(x))
+    df["Close_" + target + 'adf_500'] = df["Close_" + target].rolling(window=500).apply(lambda x: adf(x))
+    df["Close_" + target + 'adf_300'] = df["Close_" + target].rolling(window=300).apply(lambda x: adf(x))
     # df[target + 'adf_25'] = df[target].rolling(window=25).apply(lambda x: adf(x))
     return df
 
@@ -316,10 +317,10 @@ def create_dataframe(flist, excluded, crossList, keep_names=True):
         for i in cols:
             if i == "Gmt time":
                 continue
-            if i == "Close":
-                #df[i + "_original - avg"] = df[i] - df[i].ewm(span=5, adjust=False).mean()
-                df[i + "_original - avg"] = df[i] - df[i].rolling(window = 4).mean()
-            df[i] = df[i].rolling(window = 4).mean()
+                #if i == "Close":
+                # df[i + "_original - avg"] = df[i] - df[i].ewm(span=5, adjust=False).mean()
+                #df[i + "_original - avg"] = df[i] - df[i].rolling(window=4).mean()
+            df[i] = df[i].rolling(window=1).mean()
         df['Gmt time'] = df['Gmt time'].apply(lambda x: x.replace(",", " "))
         # df = df.head(75).reset_index()
         if 'Volume' in df:
@@ -393,11 +394,20 @@ def drop_columns(df, columns):
     return df
 
 
-def apply_diff(df, excluded):
+def apply_diff(df, excluded, shift=80):
     for col in df:
         if any(ext in col for ext in excluded):
             continue
-        df[col + "_diff"] = df[col].diff()
+        df[col + "_diff_shift_" + str(shift)] = df[col].diff(periods=shift)
+    return df
+
+
+def apply_shift(df, excluded):
+    for i in [80, 40]:
+        for col in df:
+            if any(ext in col for ext in excluded):
+                continue
+            df[col + "_SHIFT_" + str(i)] = df[col].shift(i)
     return df
 
 
@@ -442,6 +452,50 @@ def apply_linear_regression(df, target, window=50):
     return df
 
 
+def apply_linear_regression_on_max(df, target, window_m=10, window=50):
+    df["dist_from_lin_reg_max_" + str(window) + "_" + str(window_m)] = df[target].rolling(
+        window=window_m).max().rolling(window=window).apply(
+        lambda x: lin_reg_dist(x, window))
+    df["dist_from_lin_reg_max_" + str(window * 2) + "_" + str(window_m)] = df[target].rolling(
+        window=window_m).max().rolling(
+        window=window * 2).apply(lambda x: lin_reg_dist(x, window * 2))
+
+    df["dist_from_lin_reg_max_" + str(window * 3) + "_" + str(window_m)] = df[target].rolling(
+        window=window_m).max().rolling(
+        window=window * 3).apply(lambda x: lin_reg_dist(x, window * 3))
+    return df
+
+
+def apply_linear_regression_on_min(df, target, window_m=10, window=50):
+    df["dist_from_lin_reg_min_" + str(window) + "_" + str(window_m)] = df[target].rolling(
+        window=window_m).min().rolling(window=window).apply(
+        lambda x: lin_reg_dist(x, window))
+    df["dist_from_lin_reg_min_" + str(window * 2) + "_" + str(window_m)] = df[target].rolling(
+        window=window_m).min().rolling(
+        window=window * 2).apply(lambda x: lin_reg_dist(x, window * 2))
+
+    df["dist_from_lin_reg_min_" + str(window * 3) + "_" + str(window_m)] = df[target].rolling(
+        window=window_m).min().rolling(
+        window=window * 3).apply(lambda x: lin_reg_dist(x, window * 3))
+    return df
+
+
+def create_dataframe_for_stacking(X_train_stacking, m, X_train):
+    len = X_train.shape[0]
+    len_stacking = X_train_stacking.shape[0]
+    assert len == len_stacking
+    for i in range(0, len):
+        for model in m:
+            model_ = model[1]
+            name_model = model[0][0:5]
+            features = X_train[i].reshape(1, -1)
+            predictions = model_.predict_proba(features).tolist()[0]
+            classes = list(model_.classes_)
+            for p, c in zip(predictions, classes):
+                X_train_stacking.set_value(i, str(name_model) + "_" + str(c), float(p))
+    return X_train_stacking
+
+
 def create_target_ahead(df, CLOSE_VARIABLE, AHEAD, threshold):
     number_rows = df.shape[0]
     # Iterating row by row, check change after AHEAD candles
@@ -450,35 +504,85 @@ def create_target_ahead(df, CLOSE_VARIABLE, AHEAD, threshold):
         to_set = 0
         to_set_ = "OUT"
         end = min(number_rows, index + AHEAD + 1)
+        isIn = False
         for next in range(index + 1, end):
             value = df.iloc[[next]][CLOSE_VARIABLE][next]
             pctg = value - start
             if pctg > threshold:
-                to_set = 1
-                break
+                to_set += pctg
+            isIn = True
             if pctg < - threshold:
-                to_set = -1
-                break
+                to_set += pctg
+
         if to_set > 0:
             to_set_ = "BUY"
         if to_set < 0:
             to_set_ = "SELL"
-
+        if not isIn:
+            print("ciao")
         df.set_value(index, 'target', to_set_)
 
     return df
 
+
 def normalized(a, axis=-1, order=2):
     return a / max(a)
 
-def poly( x, coef, degree):
+
+def poly(x, coef, degree):
     import numpy.polynomial.polynomial as poly
     coefs = poly.polyfit(range(x.size), normalized(x), degree)
     return coefs[coef]
 
 
-def apply_poly(df, t, windows = 5):
-    df["poly_1_3" + str(windows)] = df["Close_" + t].rolling(window= windows).apply(lambda x: poly(x, 1, 3))
+def apply_poly_on_max(df, t, windows_m=5, windows=5):
+    df["poly_1_3" + str(windows) + "_MAX_" + str(windows_m)] = df["Close_" + t].rolling(window=windows_m).max().rolling(
+        window=windows).apply(
+        lambda x: poly(x, 1, 3))
+    df["poly_2_3" + str(windows) + "_MAX_" + str(windows_m)] = df["Close_" + t].rolling(window=windows_m).max().rolling(
+        window=windows).apply(
+        lambda x: poly(x, 2, 3))
+    df["poly_3_3" + str(windows) + "_MAX_" + str(windows_m)] = df["Close_" + t].rolling(window=windows_m).max().rolling(
+        window=windows).apply(
+        lambda x: poly(x, 3, 3))
+
+    df["poly_1_4" + str(windows) + "_MAX_" + str(windows_m)] = df["Close_" + t].rolling(window=windows_m).max().rolling(
+        window=windows).apply(
+        lambda x: poly(x, 1, 4))
+    df["poly_2_4" + str(windows) + "_MAX_" + str(windows_m)] = df["Close_" + t].rolling(window=windows_m).max().rolling(
+        window=windows).apply(
+        lambda x: poly(x, 2, 4))
+    df["poly_3_4" + str(windows) + "_MAX_" + str(windows_m)] = df["Close_" + t].rolling(window=windows_m).max().rolling(
+        window=windows).apply(
+        lambda x: poly(x, 3, 4))
+    return df
+
+
+def apply_poly_on_min(df, t, windows_m=5, windows=5):
+    df["poly_1_3" + str(windows) + "_min_" + str(windows_m)] = df["Close_" + t].rolling(window=windows_m).min().rolling(
+        window=windows).apply(
+        lambda x: poly(x, 1, 3))
+    df["poly_2_3" + str(windows) + "_min_" + str(windows_m)] = df["Close_" + t].rolling(window=windows_m).min().rolling(
+        window=windows).apply(
+        lambda x: poly(x, 2, 3))
+    df["poly_3_3" + str(windows) + "_min_" + str(windows_m)] = df["Close_" + t].rolling(window=windows_m).min().rolling(
+        window=windows).apply(
+        lambda x: poly(x, 3, 3))
+
+    df["poly_1_4" + str(windows) + "_min_" + str(windows_m)] = df["Close_" + t].rolling(window=windows_m).min().rolling(
+        window=windows).apply(
+        lambda x: poly(x, 1, 4))
+    df["poly_2_4" + str(windows) + "_min_" + str(windows_m)] = df["Close_" + t].rolling(window=windows_m).min().rolling(
+        window=windows).apply(
+        lambda x: poly(x, 2, 4))
+    df["poly_3_4" + str(windows) + "_min_" + str(windows_m)] = df["Close_" + t].rolling(window=windows_m).min().rolling(
+        window=windows).apply(
+        lambda x: poly(x, 3, 4))
+    return df
+
+
+def apply_poly(df, t, windows=5):
+    df["poly_1_3" + str(windows)] = df["Close_" + t].rolling(window=windows).apply(lambda x: poly(x, 1, 3))
     df["poly_2_3" + str(windows)] = df["Close_" + t].rolling(window=windows).apply(lambda x: poly(x, 2, 3))
     df["poly_3_3" + str(windows)] = df["Close_" + t].rolling(window=windows).apply(lambda x: poly(x, 3, 3))
 
@@ -486,6 +590,7 @@ def apply_poly(df, t, windows = 5):
     df["poly_2_4" + str(windows)] = df["Close_" + t].rolling(window=windows).apply(lambda x: poly(x, 2, 4))
     df["poly_3_4" + str(windows)] = df["Close_" + t].rolling(window=windows).apply(lambda x: poly(x, 3, 4))
     return df
+
 
 def apply_williams(df, t, window=14):
     for col in df:
@@ -541,7 +646,7 @@ def apply_CCI(df, t, window=10):
     typicalPrice = (df["High_" + t] + df["Low_" + t] + df["Close_" + t]) / 3.0
     typicalPriceSma = typicalPrice.rolling(window=window).mean()
     meanDeviation = typicalPrice.rolling(window=window).std()
-    df["CCI"] = (typicalPrice - typicalPriceSma) / (0.015 * meanDeviation)
+    df["CCI_" + str(window)] = (typicalPrice - typicalPriceSma) / (0.015 * meanDeviation)
     return df
 
 
@@ -635,6 +740,56 @@ def fourierSeries(period, N, toReturn):
         return cos[harmonic]
 
 
+def apply_fourier_on_min(df, t, window=10, window_m=5):
+    df["SIN_1_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).min().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "SIN.0"))
+    df["SIN_2_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).min().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "SIN.1"))
+    df["SIN_3_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).min().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "SIN.2"))
+    df["SIN_4_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).min().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "SIN.3"))
+    df["SIN_5_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).min().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "SIN.4"))
+
+    df["COS_1_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).min().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "COS.0"))
+    df["COS_2_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).min().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "COS.1"))
+    df["COS_3_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).min().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "COS.2"))
+    df["COS_4_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).min().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "COS.3"))
+    df["COS_5_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).min().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "COS.4"))
+    return df
+
+
+def apply_fourier_on_max(df, t, window=10, window_m=5):
+    df["SIN_1_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).max().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "SIN.0"))
+    df["SIN_2_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).max().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "SIN.1"))
+    df["SIN_3_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).max().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "SIN.2"))
+    df["SIN_4_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).max().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "SIN.3"))
+    df["SIN_5_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).max().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "SIN.4"))
+
+    df["COS_1_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).max().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "COS.0"))
+    df["COS_2_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).max().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "COS.1"))
+    df["COS_3_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).max().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "COS.2"))
+    df["COS_4_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).max().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "COS.3"))
+    df["COS_5_" + str(window) + "_" + str(window_m)] = df["Close_" + t].rolling(window=window_m).max().rolling(
+        window=window).apply(lambda x: fourierSeries(x, 5, "COS.4"))
+    return df
+
+
 def applyFourier(df, t, window=10):
     df["SIN_1_" + str(window)] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "SIN.0"))
     df["SIN_2_" + str(window)] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "SIN.1"))
@@ -648,15 +803,23 @@ def applyFourier(df, t, window=10):
     df["COS_4_" + str(window)] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "COS.3"))
     df["COS_5_" + str(window)] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "COS.4"))
 
-    df["SIN_1_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(lambda x: fourierSeries(x, 5, "SIN.0"))
-    df["SIN_2_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(lambda x: fourierSeries(x, 5, "SIN.1"))
-    df["SIN_3_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(lambda x: fourierSeries(x, 5, "SIN.2"))
-    df["SIN_4_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(lambda x: fourierSeries(x, 5, "SIN.3"))
-    df["SIN_5_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(lambda x: fourierSeries(x, 5, "SIN.4"))
+    df["SIN_1_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
+        lambda x: fourierSeries(x, 5, "SIN.0"))
+    df["SIN_2_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
+        lambda x: fourierSeries(x, 5, "SIN.1"))
+    df["SIN_3_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
+        lambda x: fourierSeries(x, 5, "SIN.2"))
+    df["SIN_4_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
+        lambda x: fourierSeries(x, 5, "SIN.3"))
+    df["SIN_5_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
+        lambda x: fourierSeries(x, 5, "SIN.4"))
 
-    df["COS_1_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(lambda x: fourierSeries(x, 5, "COS.0"))
-    df["COS_2_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(lambda x: fourierSeries(x, 5, "COS.1"))
-    df["COS_3_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(lambda x: fourierSeries(x, 5, "COS.2"))
+    df["COS_1_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
+        lambda x: fourierSeries(x, 5, "COS.0"))
+    df["COS_2_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
+        lambda x: fourierSeries(x, 5, "COS.1"))
+    df["COS_3_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
+        lambda x: fourierSeries(x, 5, "COS.2"))
     df["COS_4_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
         lambda x: fourierSeries(x, 5, "COS.3"))
     df["COS_5_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
@@ -666,7 +829,7 @@ def applyFourier(df, t, window=10):
 
 def garch(x, toReturn):
     model = arch_model(x)
-    results = model.fit(disp ="off", show_warning=False)
+    results = model.fit(disp="off", show_warning=False)
     if toReturn == "mu":
         return results.params["mu"]
     if toReturn == "omega":
@@ -709,10 +872,14 @@ def apply_macd(df, slow, fast):
             df[col + "_price-mean100"] = df[col].rolling(window=100).mean() - df[col]
             df[col + "_price-mean200"] = df[col].rolling(window=200).mean() - df[col]
             df[col + "_price-mean300"] = df[col].rolling(window=300).mean() - df[col]
+            df[col + "_price-mean400"] = df[col].rolling(window=400).mean() - df[col]
 
             df["mean25-mean50"] = df[col + "_price-mean25"] - df[col + "_price-mean50"]
             df["mean50-mean100"] = df[col + "_price-mean50"] - df[col + "_price-mean100"]
-            df[col + "_price_log"] = df[col].rolling(window=2).apply(lambda x: np.log(x[1] / x[0]))
+            df["mean100-mean200"] = df[col + "_price-mean100"] - df[col + "_price-mean200"]
+            df["mean200-mean300"] = df[col + "_price-mean200"] - df[col + "_price-mean300"]
+            df["mean400-mean300"] = df[col + "_price-mean400"] - df[col + "_price-mean300"]
+            # df[col + "_price_log"] = df[col].rolling(window=2).apply(lambda x: np.log(x[1] / x[0]))
 
     return df
 
@@ -750,8 +917,26 @@ def apply_bollinger_band(df, column, window=25):
     df['bollinger_band_up_' + str(window)] = \
         (df[column].rolling(window=window).mean() + 2.0 * df[column].rolling(window=window).std()) - df[column]
 
+    df['bollinger_band_up_' + str(window) + "shift5"] = df['bollinger_band_up_' + str(window)].shift(5)
+
     df['bollinger_band_down_' + str(window)] = df[column] - (
             df[column].rolling(window=window).mean() - 2.0 * df[column].rolling(
+        window=window).std())
+
+    df['bollinger_band_down_' + str(window) + "shift5"] = df['bollinger_band_down_' + str(window)].shift(5)
+
+    df['bollinger_band_up_' + str(window) + "3STD"] = \
+        (df[column].rolling(window=window).mean() + 3.0 * df[column].rolling(window=window).std()) - df[column]
+
+    df['bollinger_band_down_' + str(window) + "3STD"] = df[column] - (
+            df[column].rolling(window=window).mean() - 3.0 * df[column].rolling(
+        window=window).std())
+
+    df['bollinger_band_up_' + str(window) + "4STD"] = \
+        (df[column].rolling(window=window).mean() + 4.0 * df[column].rolling(window=window).std()) - df[column]
+
+    df['bollinger_band_down_' + str(window) + "4STD"] = df[column] - (
+            df[column].rolling(window=window).mean() - 4.0 * df[column].rolling(
         window=window).std())
 
     # df['bollinger_band_diff_' + str(window)] = df['bollinger_band_up_' + str(window)] - df['bollinger_band_down_' + str(window)]
