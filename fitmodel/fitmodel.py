@@ -31,7 +31,7 @@ def do_grid_search(list_models, X, y, counter, old_best_models, prefix = None, t
         print(model.model)
         print("  ...  \n")
         start = time()
-        clf = GridSearchCV(model.model, model.params, refit=True, cv=5, n_jobs=-1, verbose=0, scoring='accuracy')
+        clf = GridSearchCV(model.model, model.params, refit=True, cv=7, n_jobs=-1, verbose=0, scoring='accuracy')
         clf.fit(X, y)
         end = time()
         elapsed = (end - start) / 60.0
@@ -40,7 +40,7 @@ def do_grid_search(list_models, X, y, counter, old_best_models, prefix = None, t
         print(clf.best_params_)
         print(" Print best score \n")
         print(clf.best_score_)
-        best_score.append(clf.best_score_)
+        best_score.append(abs(clf.best_score_))
         if prefix is not None:
             with open(prefix + "_" + t + "_SCORE", 'a') as f:
                 f.write("\n *** " + str(clf.best_score_))

@@ -1,16 +1,17 @@
 import random
 
+import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from arch import arch_model
 from numpy import nan, array
-import numpy as np
 from sklearn import linear_model
+from sklearn.preprocessing import StandardScaler
 
 from algos.algos import adf
 
+SUBSET_SIZE = 1000
 THRESHOLD = 0
-AHEAD = 24
+AHEAD = 6 * 2
 
 
 def apply_candle(row, toUse):
@@ -94,6 +95,21 @@ def apply_low(row, toUse):
     else:
         low_in_pips = close - low
     return low_in_pips
+
+
+def apply_mv_avg_to(df, l, window=5):
+    for col in df:
+        if any(ext in col for ext in l):
+            continue
+        df[col + "_AVG_" + str(window)] = df[col].ewm(span=window, adjust=False).mean()
+    return df
+
+
+def apply_mv_avg_just_to(df, l, window=5):
+    for col in df:
+        if any(ext in col for ext in l) and "AVG" not in col:
+            df[col + "_AVG_" + str(window)] = df[col].ewm(span=window, adjust=False).mean()
+    return df
 
 
 def apply_lowH(row, toUse):
@@ -265,7 +281,7 @@ def apply_supp_and_res(df, target):
 
     close = df["Close_" + target]
 
-    close_smooth = close.rolling(window=2).mean()
+    close_smooth = close.rolling(window=1).mean()
 
     d_1 = close_smooth.rolling(window=2).apply(lambda x: der(x))
     d_2 = close_smooth.rolling(window=3).apply(lambda x: der(x))
@@ -301,8 +317,8 @@ def apply_supp_and_res(df, target):
 
 def apply_df_test(df, target):
     df["Close_" + target + 'adf_100'] = df["Close_" + target].rolling(window=100).apply(lambda x: adf(x))
-    df["Close_" + target + 'adf_500'] = df["Close_" + target].rolling(window=500).apply(lambda x: adf(x))
-    df["Close_" + target + 'adf_300'] = df["Close_" + target].rolling(window=300).apply(lambda x: adf(x))
+    df["Close_" + target + 'adf_40'] = df["Close_" + target].rolling(window=40).apply(lambda x: adf(x))
+    df["Close_" + target + 'adf_20'] = df["Close_" + target].rolling(window=20).apply(lambda x: adf(x))
     # df[target + 'adf_25'] = df[target].rolling(window=25).apply(lambda x: adf(x))
     return df
 
@@ -317,10 +333,14 @@ def create_dataframe(flist, excluded, crossList, keep_names=True):
         for i in cols:
             if i == "Gmt time":
                 continue
-                #if i == "Close":
+                # if i == "Close":
                 # df[i + "_original - avg"] = df[i] - df[i].ewm(span=5, adjust=False).mean()
-                #df[i + "_original - avg"] = df[i] - df[i].rolling(window=4).mean()
-            df[i] = df[i].rolling(window=1).mean()
+                # df[i + "_original - avg"] = df[i] - df[i].rolling(window=4).mean()
+            if "Close" in i:
+                df[i] = df[i].rolling(window=6).mean()
+        else:
+            df[i] = df[i].rolling(window=2).mean()
+
         df['Gmt time'] = df['Gmt time'].apply(lambda x: x.replace(",", " "))
         # df = df.head(75).reset_index()
         if 'Volume' in df:
@@ -388,9 +408,9 @@ def drop_column(dfs, column):
 
 def drop_columns(df, columns):
     for col in df:
-        for c in columns:
-            if c == col:
-                del df[c]
+        for ic in columns:
+            if ic == col:
+                del df[ic]
     return df
 
 
@@ -403,11 +423,21 @@ def apply_diff(df, excluded, shift=80):
 
 
 def apply_shift(df, excluded):
-    for i in [80, 40]:
+    for i in [6 * 5]:
         for col in df:
             if any(ext in col for ext in excluded):
                 continue
             df[col + "_SHIFT_" + str(i)] = df[col].shift(i)
+    return df
+
+
+def apply_shift_just_at(df, included):
+    it = df.copy()
+    for i in [6 * 5, 6 * 10]:
+        for col in it:
+            if any(ext in col for ext in included):
+                df[col + "_SHIFT_" + str(i)] = df[col].shift(i)
+                df[col + "_SHIFT_DIFF_" + str(i)] = df[col].diff(periods=i)
     return df
 
 
@@ -436,10 +466,12 @@ def apply_ichimo(df, t):
 
 
 def lin_reg_dist(x, window):
-    line = linear_model.LinearRegression()
+    sc = StandardScaler()
+    x = sc.fit_transform(x.reshape(-1, 1))
+    line = linear_model.LinearRegression(fit_intercept=False)
     f = line.fit(array(range(1, window + 1)).reshape(-1, 1), x)
-    y = f.predict(x[-1])
-    return x[-1] - y
+    # y = f.predict(x[-1])
+    return f.coef_[0]
 
 
 def apply_linear_regression(df, target, window=50):
@@ -498,41 +530,67 @@ def create_dataframe_for_stacking(X_train_stacking, m, X_train):
 
 def create_target_ahead(df, CLOSE_VARIABLE, AHEAD, threshold):
     number_rows = df.shape[0]
+    counter = 0
     # Iterating row by row, check change after AHEAD candles
     for index in range(number_rows):
         start = df.iloc[[index]][CLOSE_VARIABLE][index]
         to_set = 0
         to_set_ = "OUT"
         end = min(number_rows, index + AHEAD + 1)
-        isIn = False
-        for next in range(index + 1, end):
-            value = df.iloc[[next]][CLOSE_VARIABLE][next]
-            pctg = value - start
-            if pctg > threshold:
-                to_set += pctg
-            isIn = True
-            if pctg < - threshold:
-                to_set += pctg
+        if counter == 0:
+            for next in range(index + 1, end):
+                value = df.iloc[[next]][CLOSE_VARIABLE][next]
+                pctg = value - start
+                if pctg > threshold:
+                    to_set += pctg
+                if pctg < - threshold:
+                    to_set += pctg
 
-        if to_set > 0:
-            to_set_ = "BUY"
-        if to_set < 0:
-            to_set_ = "SELL"
-        if not isIn:
-            print("ciao")
-        df.set_value(index, 'target', to_set_)
+            if to_set > 0:
+                to_set_ = "BUY"
+            if to_set < 0:
+                to_set_ = "SELL"
+            df.set_value(index, 'target', to_set_)
+            counter = round(AHEAD / 6)
+        else:
+            counter -= 1
+            df.set_value(index, 'target', nan)
 
+    df.set_value(number_rows - 1, 'target', "OUT")
+    print("Ended Target AHEAD")
+    print(df.shape)
+    df = df[df["target"].notnull()]
+    print(df.shape)
     return df
 
 
-def normalized(a, axis=-1, order=2):
-    return a / max(a)
+def normalized(x, axis=-1, order=2):
+    sc = StandardScaler()
+    x = sc.fit_transform(x.reshape(-1, 1))
+    return x
 
 
 def poly(x, coef, degree):
     import numpy.polynomial.polynomial as poly
     coefs = poly.polyfit(range(x.size), normalized(x), degree)
     return coefs[coef]
+
+
+def apply_coefs_behind(df, target, window=50):
+    window = ""
+    df["coef_behind_500_400_1" + str(window)] = df[target].rolling(window=500).apply(lambda x: x).head(100).apply(
+        lambda x: poly(x, 1, 2))
+    df["coef_behind_400_300_1" + str(window)] = df[target].rolling(window=400).head(100).apply(lambda x: poly(x, 1, 2))
+    df["coef_behind_300_200_1" + str(window)] = df[target].rolling(window=300).head(100).apply(lambda x: poly(x, 1, 2))
+    df["coef_behind_200_100_1" + str(window)] = df[target].rolling(window=200).head(100).apply(lambda x: poly(x, 1, 2))
+    df["coef_behind_100_0_1" + str(window)] = df[target].rolling(window=100).head(100).apply(lambda x: poly(x, 1, 2))
+
+    df["coef_behind_500_400_2" + str(window)] = df[target].rolling(window=500).head(100).apply(lambda x: poly(x, 2, 2))
+    df["coef_behind_400_300_2" + str(window)] = df[target].rolling(window=400).head(100).apply(lambda x: poly(x, 2, 2))
+    df["coef_behind_300_200_2" + str(window)] = df[target].rolling(window=300).head(100).apply(lambda x: poly(x, 2, 2))
+    df["coef_behind_200_100_2" + str(window)] = df[target].rolling(window=200).head(100).apply(lambda x: poly(x, 2, 2))
+    df["coef_behind_100_0_2" + str(window)] = df[target].rolling(window=100).head(100).apply(lambda x: poly(x, 2, 2))
+    return df
 
 
 def apply_poly_on_max(df, t, windows_m=5, windows=5):
@@ -793,26 +851,14 @@ def apply_fourier_on_max(df, t, window=10, window_m=5):
 def applyFourier(df, t, window=10):
     df["SIN_1_" + str(window)] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "SIN.0"))
     df["SIN_2_" + str(window)] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "SIN.1"))
-    df["SIN_3_" + str(window)] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "SIN.2"))
-    df["SIN_4_" + str(window)] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "SIN.3"))
-    df["SIN_5_" + str(window)] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "SIN.4"))
 
     df["COS_1_" + str(window)] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "COS.0"))
     df["COS_2_" + str(window)] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "COS.1"))
-    df["COS_3_" + str(window)] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "COS.2"))
-    df["COS_4_" + str(window)] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "COS.3"))
-    df["COS_5_" + str(window)] = df["Close_" + t].rolling(window=window).apply(lambda x: fourierSeries(x, 5, "COS.4"))
 
     df["SIN_1_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
         lambda x: fourierSeries(x, 5, "SIN.0"))
     df["SIN_2_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
         lambda x: fourierSeries(x, 5, "SIN.1"))
-    df["SIN_3_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
-        lambda x: fourierSeries(x, 5, "SIN.2"))
-    df["SIN_4_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
-        lambda x: fourierSeries(x, 5, "SIN.3"))
-    df["SIN_5_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
-        lambda x: fourierSeries(x, 5, "SIN.4"))
 
     df["COS_1_D_" + str(window)] = df["Close_" + t].diff().rolling(window=window).apply(
         lambda x: fourierSeries(x, 5, "COS.0"))
@@ -867,6 +913,7 @@ def apply_macd(df, slow, fast):
             df[col + "_macdline"] = macd_line
             # df[col + "_signalline"] = signal_line
             # df[col + "_macdhist"] = macd_hist
+            df[col + "_price-mean25"] = df[col].rolling(window=10).mean() - df[col]
             df[col + "_price-mean25"] = df[col].rolling(window=25).mean() - df[col]
             df[col + "_price-mean50"] = df[col].rolling(window=50).mean() - df[col]
             df[col + "_price-mean100"] = df[col].rolling(window=100).mean() - df[col]
@@ -879,12 +926,122 @@ def apply_macd(df, slow, fast):
             df["mean100-mean200"] = df[col + "_price-mean100"] - df[col + "_price-mean200"]
             df["mean200-mean300"] = df[col + "_price-mean200"] - df[col + "_price-mean300"]
             df["mean400-mean300"] = df[col + "_price-mean400"] - df[col + "_price-mean300"]
-            # df[col + "_price_log"] = df[col].rolling(window=2).apply(lambda x: np.log(x[1] / x[0]))
+            df[col + "_price_log2"] = df[col].rolling(window=2).apply(lambda x: np.log(x[-1] / x[0]))
+            df[col + "_price_log5"] = df[col].rolling(window=5).apply(lambda x: np.log(x[-1] / x[0]))
+            df[col + "_price_log10"] = df[col].rolling(window=10).apply(lambda x: np.log(x[-1] / x[0]))
+            df[col + "_price_log20"] = df[col].rolling(window=20).apply(lambda x: np.log(x[-1] / x[0]))
+            df[col + "_price_log30"] = df[col].rolling(window=30).apply(lambda x: np.log(x[-1] / x[0]))
+            df[col + "_price_log40"] = df[col].rolling(window=40).apply(lambda x: np.log(x[-1] / x[0]))
 
     return df
 
 
-def create_month_column(df):
+def discretize(df, bins=15):
+    df = df.dropna(thresh=2, axis=1)
+    df = df.replace([np.inf, -np.inf], np.nan)
+    df = df.dropna(how='any').reset_index(drop=True)
+    for col in df:
+        if col == "target":
+            continue
+        if len(df[col].unique()) == 1:
+            df.drop(col, inplace=True, axis=1)
+            continue
+        df[col] = pd.qcut(df[col].values, bins, duplicates="drop").codes
+    return df
+
+
+def coefLinReg(x, window):
+    sc = StandardScaler()
+    x = sc.fit_transform(x.reshape(-1, 1))
+    line = linear_model.LinearRegression()
+    f = line.fit(array(range(1, window + 1)).reshape(-1, 1), x)
+    return f.coef_[0]
+
+
+def interceptLinReg(x, window):
+    sc = StandardScaler()
+    x = sc.fit_transform(x.reshape(-1, 1))
+    line = linear_model.LinearRegression()
+    f = line.fit(array(range(1, window + 1)).reshape(-1, 1), x)
+    return f.intercept_[0]
+
+
+def apply_std(df, t, window=20):
+    df["STD_" + str(window)] = df["Close_" + t].rolling(window).std()
+    window = window * 2
+    df["STD_" + str(window)] = df["Close_" + t].rolling(window).std()
+    return df
+
+
+def apply_mayority(df, target, window=10):
+    df["m"] = df["Close_" + target].rolling(window=window).apply(lambda x: coefLinReg(x, window))
+    df = df.dropna(how='any').reset_index(drop=True)
+    i = 0.1
+    for j, row in df.iterrows():
+        th = row["m"]
+        up = th + i * abs(th)
+        down = th - i * abs(th)
+        newdf = df[(df["m"] < up) & (df["m"] > down)]
+        sell = newdf[newdf["target"] == "SELL"].shape[0] + 1
+        buy = newdf[newdf["target"] == "BUY"].shape[0] + 1
+        sell = sell / (sell + buy) * 100.0
+        df.set_value(j, "PCG_SELL_" + str(window), sell)
+
+    return df
+
+
+def dist_from_average(x, window):
+    pass
+
+
+def subset_df(df, target, window=150):
+    print("Getting subset dataset using window: " + str(window))
+    # df["THRESHOLD"] = df["Close_" + target].rolling(window=window).max() -df["Close_" + target].rolling(
+    # window=window).min()
+    # df["THRESHOLD"] = df["Close_" + target].rolling(window=window).apply(
+    #    lambda x: dist_from_average(x, window))
+    # df["THRESHOLD_2"] = df["Close_" + target].rolling(window=int(window)).apply(
+    #    lambda x: dist_from_average(x, window))
+    df["THRESHOLD"] = (df["Close_" + target].rolling(window=100).mean() - df["Close_" + target].rolling(
+        window=50).mean()).rolling(
+        window=20).sum()
+    df["THRESHOLD_2"] = (df["Close_" + target].rolling(window=100).mean() - df["Close_" + target].rolling(
+        window=200).mean()).rolling(
+        window=20).sum()
+    th = df.tail(1)["THRESHOLD"].tolist()[0]
+    th2 = df.tail(1)["THRESHOLD_2"].tolist()[0]
+    done = True
+    i = 0.05
+    while done:
+        up = th + i * abs(th)
+        down = th - i * abs(th)
+        up2 = th2 + i * abs(th2)
+        down2 = th2 - i * abs(th2)
+        gmt = df.tail(1)["Gmt time"].tolist()[0]
+        print("Cutting out values more than " + str(up))
+        print("Cutting out values less than " + str(down))
+        print("Cutting out values more than " + str(up2))
+        print("Cutting out values less than " + str(down2))
+        print("GMT: " + str(gmt))
+        newdf = df[
+            (df["THRESHOLD"] < up) & (df["THRESHOLD"] > down) & (df["THRESHOLD_2"] < up2) & (df["THRESHOLD_2"] > down2)]
+        print(df.shape)
+        print(newdf.shape)
+        if newdf.shape[0] > SUBSET_SIZE:
+            done = False
+            print("Done With i: " + str(i))
+        i = i + 0.05
+
+    var = newdf.tail(1)["Gmt time"].tolist()[0]
+    assert var == gmt
+    sell = newdf[newdf["target"] == "SELL"].shape[0]
+    buy = newdf[newdf["target"] == "BUY"].shape[0]
+    out = newdf[newdf["target"] == "OUT"].shape[0]
+    print("SELL " + str(sell))
+    print("BUY " + str(buy))
+    print("OUT " + str(out))
+    return newdf
+
     col = df['Gmt time']
     month = col.apply(lambda x: int(x.split('-')[0]))
     df['month'] = month
@@ -908,8 +1065,8 @@ def apply_support_and_resistance(df, target, window=50):
     p = (high + low + close) / 3.0
     r1 = (2 * p) - low
     s1 = (2 * p) - high
-    df["distanceFromR1" + str(window)] = df["Close_" + target] - r1
-    df["distanceFromS1" + str(window)] = df["Close_" + target] - s1
+    df["distanceFromR1_" + str(window)] = df["Close_" + target] - r1
+    df["distanceFromS1_" + str(window)] = df["Close_" + target] - s1
     return df
 
 

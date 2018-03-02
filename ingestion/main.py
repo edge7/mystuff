@@ -1,32 +1,33 @@
 import argparse
 import os
 
+from sklearn.metrics import f1_score, accuracy_score
+from sklearn.neural_network import MLPClassifier
+from sklearn.tree import DecisionTreeClassifier
+
+from economic_calendar.economic_calendar import check_if_available, apply_calendar
+from feature_selection.feature_extraction import do_feature_extraction
+
 mingw_path = 'C:\\Program Files\\mingw-w64\\x86_64-7.2.0-posix-seh-rt_v5-rev1\\mingw64\\bin'
 os.environ['PATH'] = mingw_path + ';' + os.environ['PATH']
 
 import pathlib
 import time
-import math
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier, BaggingClassifier
 from sklearn.ensemble import VotingClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVC
 from xgboost.sklearn import XGBClassifier
 from feature_selection.feature_importance import FeatureSelection
 from fitmodel.fitmodel import do_grid_search
 from gridSearch.gridSearch import GridSearchCustomModel
 from processing.processing import create_dataframe, drop_column, join_dfs, drop_original_values, \
-    apply_macd, apply_bollinger_band, drop_columns, apply_ichimo, apply_stochastic, create_target_ahead, AHEAD, \
-    apply_momentum, apply_rsi, apply_distance_from_max, apply_distance_from_min, \
-    apply_support_and_resistance, apply_linear_regression, sup_and_res, apply_williams, apply_PROC, apply_HeikenAshi, \
-    apply_CCI, applyWCP, applyFourier, apply_diff, apply_poly, apply_linear_regression_on_min, \
-    apply_linear_regression_on_max, apply_df_test, create_dataframe_for_stacking, apply_fourier_on_min, \
-    apply_fourier_on_max, apply_poly_on_max, apply_poly_on_min, apply_shift
+    apply_macd, apply_bollinger_band, drop_columns, apply_stochastic, create_target_ahead, AHEAD, \
+    apply_momentum, apply_rsi, apply_diff, subset_df, apply_support_and_resistance, apply_df_test, apply_shift_just_at, \
+    apply_mayority, apply_mv_avg_to, apply_mv_avg_just_to, applyFourier
 from utility.utility import get_len_dfs
 
-CHANGE_IN_PIPS = 0.0000
+CHANGE_IN_PIPS = 0.0
 last_pred = "OUT"
 crossList = []
 prefix = "C:\\Users\\Administrator\\AppData\\Roaming\\MetaQuotes\\Terminal\\1DAFD9A7C67DC84FE37EAA1FC1E5CF75\\tester\\files\\"
@@ -45,14 +46,23 @@ if __name__ == "__main__":
     data_file = prefix + "pricefile_" + args.target
     result_file = prefix + "resultfile_" + args.target
     best_score_file = prefix + "best_score_" + args.target
+    test_file = prefix + "test_Score_" + args.target
     counter = 0
     crossList.append(args.target)
     old_best_models = None
     old_best_models_ = None
+    old_calendar = None
 
     RETRAIN = 0
     fs = None
     fs_counter = 0
+
+    # Economic Calendar
+    file = "C:\\Users\\Administrator\\Desktop\\CalendarioEconomico"
+    calendars = check_if_available(file, args.target)
+    import warnings
+
+    warnings.filterwarnings("ignore")
     # Infinite loop
     while True:
 
@@ -66,10 +76,10 @@ if __name__ == "__main__":
             counter %= round(AHEAD)
             RETRAIN += 1
             lines = []
-            with open(data_file, 'r') as f:
-                lines = f.readlines()
-            with open(data_file, 'w') as f:
-                f.writelines(lines[:1] + lines[2:])
+            # with open(data_file, 'r') as f:
+            #     lines = f.readlines()
+            # with open(data_file, 'w') as f:
+            #     f.writelines(lines[:1] + lines[2:])
             with open(result_file, 'w') as f:
                 f.write(res)
             os.remove(notification_file)
@@ -88,198 +98,103 @@ if __name__ == "__main__":
         # Inner join on GMT time
         df = join_dfs(dfs, "Gmt time")
 
-        df = apply_ichimo(df, args.target)
+
+
+        #           ---- Applying MACD ---#
+        df = apply_macd(df, 26, 9)
+
+        # df = apply_ichimo(df, args.target)
 
         df = apply_rsi(df, "")
         df = apply_rsi(df, "", window=25)
-        df = apply_rsi(df, "", window=35)
+        # df = apply_rsi(df, "", window=35)
 
-        df = sup_and_res(df, args.target, window=100)
-        last_close = df.tail(1)["Close_" + args.target]
-        last_close = last_close.tolist()[0]
-        c = df.tail(1)["Close_" + args.target].tolist()[0]
-        sup = c + df.tail(1)["closest_sup"].tolist()[0]
-        res = c + df.tail(1)["closest_res"].tolist()[0]
-        with open(prefix + "SR" + args.target, 'w') as f:
-            f.write(str(sup) + "\n" + (str(res) + "\n"))
-
-        df = apply_support_and_resistance(df, args.target)
+        # df = sup_and_res(df, args.target, window=100)
+        df = applyFourier(df, args.target, window=48)
+        df = applyFourier(df, args.target, window=150)
+        df = applyFourier(df, args.target, window=300)
         df = apply_support_and_resistance(df, args.target, window=50)
         df = apply_support_and_resistance(df, args.target, window=100)
         df = apply_support_and_resistance(df, args.target, window=25)
-        df = apply_support_and_resistance(df, args.target, window=200)
+        # df = apply_support_and_resistance(df, args.target, window=200)
 
         # df = apply_diff_on(df, ["Volume_" + args.target])
 
         #           ---- Momentum ---- #
-        # df = apply_momentum(df, "Close_" + args.target, window=5)
+        df = apply_momentum(df, "Close_" + args.target, window=5)
+        df = apply_momentum(df, "Close_" + args.target, window=3)
+        df = apply_momentum(df, "Close_" + args.target, window=8)
         df = apply_momentum(df, "Close_" + args.target, window=50)
         df = apply_momentum(df, "Close_" + args.target, window=10)
         # df = apply_momentum(df, "Close_" + args.target, window=15)
-        df = apply_momentum(df, "Close_" + args.target, window=25)
+        # df = apply_momentum(df, "Close_" + args.target, window=25)
         df = apply_momentum(df, "Close_" + args.target, window=100)
-        df = apply_momentum(df, "Close_" + args.target, window=200)
+        # df = apply_momentum(df, "Close_" + args.target, window=200)
 
         #           ---- Stochastic ---- #
-        df = apply_stochastic(df, args.target, window=50, mean=5)
-        df = apply_stochastic(df, args.target, window=10, mean=1)
-        # df = apply_stochastic(df, args.target, window=9, mean=1)
-        df = apply_stochastic(df, args.target, window=80, mean=1)
-        df = apply_stochastic(df, args.target, window=200, mean=20)
-        df = apply_stochastic(df, args.target, window=400, mean=25)
-        #  df = apply_stochastic(df, args.target, window=8, mean=2)
-
-        #           ---- Williams ---- #
-        df = apply_williams(df, args.target, window=20)
-        df = apply_williams(df, args.target, window=9)
-        df = apply_williams(df, args.target, window=45)
-        # df = apply_williams(df, args.target, window=7)
-        df = apply_williams(df, args.target, window=105)
-
-        #           ---- PROC ---- #
-        df = apply_PROC(df, args.target, window=15)
-        df = apply_PROC(df, args.target, window=75)
-        df = apply_PROC(df, args.target, window=25)
-        df = apply_PROC(df, args.target, window=50)
-        df = apply_PROC(df, args.target, window=150)
-        df = apply_PROC(df, args.target, window=250)
-
-        #           ---- Applying MACD ---#
-        df = apply_macd(df, 100, 50)
+        df = apply_stochastic(df, args.target, window=50, mean=10)
+        df = apply_stochastic(df, args.target, window=10, mean=3)
 
         #           ---- Bollinger Band ---- #
         df = apply_bollinger_band(df, "Close_" + args.target, window=50)
         df = apply_bollinger_band(df, "Close_" + args.target, window=100)
-        df = apply_bollinger_band(df, "Close_" + args.target, window=25)
-        df = apply_bollinger_band(df, "Close_" + args.target, window=205)
-        df = apply_bollinger_band(df, "Close_" + args.target, window=300)
         df = apply_bollinger_band(df, "Close_" + args.target, window=400)
-
-        #           ----  Heiken Ashi
-        df = apply_HeikenAshi(df, args.target)
-
-        #           ----  CCI ------ #
-        # df = apply_CCI(df, args.target, window=15)
-        df = apply_CCI(df, args.target, window=25)
-        df = apply_CCI(df, args.target, window=50)
-        df = apply_CCI(df, args.target, window=100)
-
-        #           ----  WCP ------ #
-        df = applyWCP(df, args.target)
-
-        #           ---- GARCH ------ #
-        # df = apply_GARCH(df, args.target, window=5)
-        # df = apply_GARCH(df, args.target, window=10)
-        # df = apply_GARCH(df, args.target, window=60)
-
-        #          ---- FOURIER ----- #
-        df = apply_fourier_on_min(df, args.target, window=300, window_m=5)
-        df = apply_fourier_on_min(df, args.target, window=15, window_m=150)
-        df = apply_fourier_on_min(df, args.target, window=400, window_m=10)
-        df = apply_fourier_on_min(df, args.target, window=150, window_m=3)
-
-        df = apply_fourier_on_max(df, args.target, window=300, window_m=5)
-        df = apply_fourier_on_max(df, args.target, window=400, window_m=10)
-        df = apply_fourier_on_max(df, args.target, window=150, window_m=3)
-        df = apply_fourier_on_max(df, args.target, window=15, window_m=150)
-
-        df = applyFourier(df, args.target, window=20)
-        df = applyFourier(df, args.target, window=15)
-        df = applyFourier(df, args.target, window=10)
-        df = applyFourier(df, args.target, window=50)
-        df = applyFourier(df, args.target, window=100)
-        df = applyFourier(df, args.target, window=200)
-        df = applyFourier(df, args.target, window=300)
-        df = applyFourier(df, args.target, window=500)
-        df = applyFourier(df, args.target, window=1000)
-        #
-        df = apply_poly(df, args.target, windows=5)
-        df = apply_poly(df, args.target, windows=10)
-        df = apply_poly(df, args.target, windows=50)
-        df = apply_poly(df, args.target, windows=100)
-        df = apply_poly(df, args.target, windows=200)
-        df = apply_poly(df, args.target, windows=500)
-        df = apply_poly(df, args.target, windows=1000)
-
-        df = apply_poly_on_max(df, args.target, windows_m=5, windows=5)
-        df = apply_poly_on_max(df, args.target, windows_m=10, windows=5)
-        df = apply_poly_on_max(df, args.target, windows_m=5, windows=15)
-        df = apply_poly_on_max(df, args.target, windows_m=5, windows=50)
-        df = apply_poly_on_max(df, args.target, windows_m=15, windows=5)
-        df = apply_poly_on_max(df, args.target, windows_m=10, windows=50)
-        df = apply_poly_on_max(df, args.target, windows_m=10, windows=500)
-        df = apply_poly_on_max(df, args.target, windows_m=10, windows=200)
-
-        df = apply_poly_on_min(df, args.target, windows_m=5, windows=5)
-        df = apply_poly_on_min(df, args.target, windows_m=10, windows=5)
-        df = apply_poly_on_min(df, args.target, windows_m=5, windows=15)
-        df = apply_poly_on_min(df, args.target, windows_m=5, windows=50)
-        df = apply_poly_on_min(df, args.target, windows_m=15, windows=5)
-        df = apply_poly_on_min(df, args.target, windows_m=10, windows=50)
-        df = apply_poly_on_min(df, args.target, windows_m=10, windows=500)
-        df = apply_poly_on_min(df, args.target, windows_m=10, windows=200)
-
-        df = apply_distance_from_max(df, "Close_" + args.target, window=500)
-        df = apply_distance_from_min(df, "Close_" + args.target, window=500)
-        df = apply_distance_from_max(df, "Close_" + args.target, window=750)
-        df = apply_distance_from_min(df, "Close_" + args.target, window=750)
-        df = apply_distance_from_max(df, "Close_" + args.target, window=1500)
-        df = apply_distance_from_min(df, "Close_" + args.target, window=1500)
-
-        df = apply_linear_regression(df, "Close_" + args.target, window=30)
-        df = apply_linear_regression(df, "Close_" + args.target, window=75)
-        df = apply_linear_regression(df, "Close_" + args.target, window=250)
-        df = apply_linear_regression(df, "Close_" + args.target, window=125)
-        #
-        df = apply_linear_regression_on_min(df, "Close_" + args.target, window_m=10, window=75)
-        df = apply_linear_regression_on_min(df, "Close_" + args.target, window_m=5, window=15)
-        df = apply_linear_regression_on_min(df, "Close_" + args.target, window_m=20, window=250)
-        df = apply_linear_regression_on_min(df, "Close_" + args.target, window_m=120, window=5)
-        df = apply_linear_regression_on_min(df, "Close_" + args.target, window_m=30, window=125)
-        df = apply_linear_regression_on_min(df, "Close_" + args.target, window_m=240, window=5)
-        df = apply_linear_regression_on_min(df, "Close_" + args.target, window_m=240, window=10)
-        df = apply_linear_regression_on_min(df, "Close_" + args.target, window_m=480, window=10)
-        df = apply_linear_regression_on_min(df, "Close_" + args.target, window_m=480, window=5)
-        df = apply_linear_regression_on_min(df, "Close_" + args.target, window_m=5, window=15)
-        df = apply_linear_regression_on_min(df, "Close_" + args.target, window_m=5, window=5)
-        df = apply_linear_regression_on_min(df, "Close_" + args.target, window_m=10, window=5)
-        #
-        df = apply_linear_regression_on_max(df, "Close_" + args.target, window_m=5, window=15)
-        df = apply_linear_regression_on_max(df, "Close_" + args.target, window_m=120, window=5)
-        df = apply_linear_regression_on_max(df, "Close_" + args.target, window_m=5, window=5)
-        df = apply_linear_regression_on_max(df, "Close_" + args.target, window_m=10, window=75)
-        df = apply_linear_regression_on_max(df, "Close_" + args.target, window_m=10, window=5)
-        df = apply_linear_regression_on_max(df, "Close_" + args.target, window_m=20, window=250)
-        df = apply_linear_regression_on_max(df, "Close_" + args.target, window_m=30, window=125)
-        df = apply_linear_regression_on_max(df, "Close_" + args.target, window_m=240, window=5)
-        df = apply_linear_regression_on_max(df, "Close_" + args.target, window_m=240, window=10)
-        df = apply_linear_regression_on_max(df, "Close_" + args.target, window_m=480, window=5)
-        df = apply_linear_regression_on_max(df, "Close_" + args.target, window_m=480, window=10)
         df = apply_df_test(df, args.target)
 
-        df = apply_diff(df, ["Gmt time", "SIN", "COS", "poly"], shift=24)
-
-        df = create_target_ahead(df, "Close_" + args.target, AHEAD, CHANGE_IN_PIPS)
+        # df = apply_coefs_behind(df, "Close_" + args.target)
+        # df = apply_std(df, args.target, window=30)
+        df = apply_diff(df, ["Gmt time", "SIN", "COS", "poly"], shift=3)
+        df = apply_diff(df, ["Gmt time", "SIN", "COS", "poly"], shift=6)
+        #df = apply_diff(df, ["Gmt time", "SIN", "COS", "poly"], shift=12)
+        #df = apply_diff(df, ["Gmt time", "SIN", "COS", "poly", "diff"], shift=24)
+        # df = apply_diff(df, ["Gmt time", "SIN", "COS", "poly", "_diff_shift_"], shift=6 * 3)
+         #df = apply_mayority(df, args.target, window=100)
 
         df['target_in_pips'] = df["Close_" + args.target]
-        df = drop_original_values(df, crossList)
+
         df = drop_columns(df, ["Close_" + args.target + "_diff", "Open_" + args.target + "_diff",
                                "Low_" + args.target + "_diff",
                                "High_" + args.target + "_diff"])
 
-        # ------------ Apply shift -------------------
-        df = apply_shift(df, ["Gmt time", "diff", "target", "SIN", "COS", "poly", "shift", "SHIFT"])
-
         df_prediction = df.copy()
         df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna(how='any').reset_index(drop=True)
+        df, old_calendar = apply_calendar(df, calendars, old_calendar=old_calendar)
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna(how='any').reset_index(drop=True)
+        df = apply_shift_just_at(df, ["LAST"])
+        df = df.replace([np.inf, -np.inf], np.nan)
         df = df.dropna(how='any')
+        df = apply_mv_avg_to(df, ["target"], window=5)
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna(how='any').reset_index(drop=True)
+        df = apply_mv_avg_to(df, ["target", "AVG"], window=10)
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna(how='any').reset_index(drop=True)
+        df = apply_mv_avg_to(df, ["target", "AVG"], window=60)
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna(how='any').reset_index(drop=True)
+        df = apply_mv_avg_to(df, ["target", "AVG"], window=120)
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna(how='any').reset_index(drop=True)
+        df = apply_mv_avg_just_to(df, ["LAST"], window=240)
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna(how='any').reset_index(drop=True)
+        df = apply_mv_avg_just_to(df, ["LAST"], window=6*120)
+        df = create_target_ahead(df, "Close_" + args.target, AHEAD, CHANGE_IN_PIPS)
+
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna(how='any').reset_index(drop=True)
+        #df = subset_df(df, args.target, window=100)
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna(how='any').reset_index(drop=True)
         target_in_pips = df['target_in_pips']
         t = df['target']
         with open(prefix + " " + args.target, 'a') as f:
             f.write(str(t.tolist()[-int(args.train_len):]) + "\n")
         gmt = df['Gmt time']
         df = drop_column([df], "Gmt time")[0]
-        # df = drop_column([df], "diff")[0]
+        df = drop_original_values(df, crossList)
         df = drop_column([df], 'target_in_pips')[0]
         if fs is None:
             fs = FeatureSelection(df, prefix + "_" + args.target)
@@ -287,190 +202,172 @@ if __name__ == "__main__":
         total_length = df.shape[0]
         start = 0
         train_len = int(args.train_len)
-        test_len = 1
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna(how='any').reset_index(drop=True)
+        dfs = do_feature_extraction(df, args.target, prefix, train_len)
+        if len(dfs) == 0:
+            print("No good model Skipping !!!")
+            with open(result_file, 'w') as f:
+                f.write("OUT")
+                counter += 1
+                counter %= round(AHEAD)
+            os.remove(notification_file)
+            continue
 
-        df = df.tail(int(args.train_len) + 1).reset_index(drop=True)
-        train_set_live = df.head(int(args.train_len) - 30)
-        to_predict = df.tail(1)
-
-        X_train = train_set_live.ix[:, train_set_live.columns != 'target']
-        y_train = train_set_live.ix[:, train_set_live.columns == 'target']
-        X_for_col = X_train
-        X_test = to_predict.ix[:, to_predict.columns != 'target']
-        y_test = to_predict.ix[:, to_predict.columns == 'target']
-
-        # Scaling X
-        sc = StandardScaler()
-        X_train = sc.fit_transform(X_train)
-        X_test = sc.transform(X_test)
-
-        # Just DO FEATURE SELECTION
-        param_grid_rf = {'n_estimators': [15, 30, 50, 100, 120], 'max_depth': [4, 5, 7, 12, 15, 20]
-                         }
-        gdRf = GridSearchCustomModel(RandomForestClassifier(n_jobs=-1, random_state=42), param_grid_rf)
-        best_models_, best_score = do_grid_search([gdRf], X_train, y_train.values.ravel(), 100, old_best_models_,
-                                                  prefix,
-                                                  args.target)
-        old_best_models_ = best_models_
-        few_features_for_stacking = None
-        for i in best_models_:
-            if "RandomForest" in str(i.best_estimator_):
-                rf = i.best_estimator_
-            feature_import = rf.feature_importances_.tolist()
-            new_list = [(importance, name) for name, importance in zip(X_for_col.columns.tolist(), feature_import)]
-            sorted_by_importance = sorted(new_list, key=lambda tup: tup[0], reverse=True)
-            featureToUse = sorted_by_importance[:round(math.sqrt(int(args.train_len) * 2.5))]
-            few_features_for_stacking = sorted_by_importance[:round(math.sqrt(int(args.train_len) / 2))]
-            with open(prefix + "FS" + args.target, 'a') as f:
-                f.write(str(featureToUse) + "\n")
-            featureToUse = [x[1] for x in featureToUse]
-            few_features_for_stacking = [x[1] for x in few_features_for_stacking]
-            newDF = df[featureToUse + ["target"]]
-            dfForStacking = df[few_features_for_stacking + ["target"]]
-
-        df = newDF
-        df = df.tail(int(args.train_len) + 1)
-        train_set_live = df.head(int(args.train_len) - 30)
-        to_predict = df.tail(1)
-
-        X_train = train_set_live.ix[:, train_set_live.columns != 'target']
-        y_train = train_set_live.ix[:, train_set_live.columns == 'target']
-        X_test = to_predict.ix[:, to_predict.columns != 'target']
-        y_test = to_predict.ix[:, to_predict.columns == 'target']
-
-        X_train_stacking = train_set_live[few_features_for_stacking]
-        y_train_stacking = train_set_live["target"]
-        X_test_stacking = to_predict[few_features_for_stacking]
-
-        # Scaling X
-        sc = StandardScaler()
-        X_train = sc.fit_transform(X_train)
-        X_test = sc.transform(X_test)
-        # END FEATURE SELECTION
-
-        param_grid_log_reg = {'C': 2.0 ** np.arange(-4, 8)}
+        param_grid_log_reg = {'C': 2.0 ** np.arange(-3, 7)}
         gdLog = GridSearchCustomModel(LogisticRegression(penalty='l1', max_iter=2000, random_state=42),
                                       param_grid_log_reg)
 
-        param_grid_rf = {'n_estimators': [15, 30, 50, 100, 120, 200, 300], 'max_depth': [4, 5, 7, 12, 15, 20]
+        param_grid_rf = {'n_estimators': [ 100, 120, 200, 300, 500], 'max_depth': [4, 5, 7, 12, 15, 20]
                          }
-        gdRf = GridSearchCustomModel(RandomForestClassifier(n_jobs=-1, random_state=42), param_grid_rf)
-
-        param_grid_svm = [
-            {'C': 10.0 ** np.arange(-3, 4), 'kernel': ['linear']}
-            # {'C': 10.0 ** np.arange(-3, 4), 'gamma': 8.5 ** np.arange(-3, 3), 'kernel': ['rbf']
-            # }
-        ]
-        gdSVM = GridSearchCustomModel(SVC(probability=True, random_state=42), param_grid_svm)
-
-        param_grid_GB = {'learning_rate': [0.05, 0.03, 0.08, 0.1, 0.2], 'n_estimators': [20, 50, 100, 200],
-                         'max_depth': [3, 7, 10, 15]
-                         }
-
-        gdGB = GridSearchCustomModel(GradientBoostingClassifier(random_state=42, max_features='auto'), param_grid_GB)
+        gdRf = GridSearchCustomModel(
+            RandomForestClassifier(n_jobs=-1, random_state=42, class_weight="balanced", min_weight_fraction_leaf=0.05,
+                                   criterion="entropy"),
+            param_grid_rf)
 
         n_estimators = [15, 50, 100]
         learning_rate = [0.001, 0.01, 0.1]
         param_grid_XGB = dict(learning_rate=learning_rate, n_estimators=n_estimators, max_depth=[3, 7, 10])
         gbXGB = GridSearchCustomModel(XGBClassifier(random_state=42, n_jobs=-1), param_grid_XGB)
-        try:
-            best_models, best_score = do_grid_search([gdRf, gbXGB], X_train, y_train.values.ravel(), 10000,
-                                                     old_best_models, prefix,
-                                                     args.target)
-            with open(best_score_file, 'a') as f:
-                f.write("\n")
-                for b in best_score:
-                    f.write(str(b) + " ")
-                f.write("\n")
-            for i in best_models:
-                if "RandomForest" in str(i.best_estimator_):
-                    rf = i.best_estimator_
-            fs.write_feature_importance(rf, featureToUse)
-            fs_counter += 1
-        except Exception as e:
-            print(e)
-            best_models = old_best_models
-            with open(prefix + "_" + args.target + "_LOG", 'a') as f:
-                f.write(str(e))
 
-            os.remove(notification_file)
-            with open(result_file, 'w') as f:
-                f.write("HOLD")
-            continue
-        RETRAIN = RETRAIN % 30
-        RETRAIN += 1
+        bbc = GridSearchCustomModel(
+            BaggingClassifier(base_estimator=DecisionTreeClassifier(criterion="entropy", class_weight="balanced",
+                                                                    max_features="auto"),
+                              random_state=42, n_jobs=-1, max_features=1),
+            {'n_estimators': [100, 200, 500]})
 
-        tp = df_prediction.tail(1)
-        gmt = tp['Gmt time']
-        m = [(str(model.best_estimator_), model.best_estimator_) for model in best_models]
-        # X_train_stacking_with_predictions = create_dataframe_for_stacking(X_train_stacking, m, X_train)
-        voting_classifier = VotingClassifier(estimators=m, voting='soft', n_jobs=-1)
-        voting_classifier.fit(X_train, y_train.values.ravel())
-        res = voting_classifier.predict(X_test)[0]
+        rfbc = GridSearchCustomModel(
+            BaggingClassifier(
+                base_estimator=RandomForestClassifier(criterion="entropy", class_weight="balanced_subsample",
+                                                      max_features="auto", n_estimators=1, bootstrap=True),
+                random_state=42, n_jobs=-1, max_features=1),
+            {'n_estimators': [100, 200, 500], 'max_features': [1, 3, 5, 7]}
+        )
 
-        print("vot")
-        print(res)
-        print(voting_classifier.predict_proba(X_test)[0])
-        print(m[0][0])
-        print(m[0][1].predict_proba(X_test)[0])
-        print(m[1][0])
-        print(m[1][1].predict_proba(X_test)[0])
-        classes = list(voting_classifier.classes_)
-        probs = voting_classifier.predict_proba(X_test).tolist()[0]
-        # print("\n\n --- TRAINING STACK MODEL   \n\n")
-        # X_test_stacking_with_predictions = create_dataframe_for_stacking(X_test_stacking.reset_index(drop=True), m,
-        # X_test)
+        param_grid_ANN = {"hidden_layer_sizes": [(20, 20), (15,), (5,), (10, 10), (10, 5),
+                                                 (5, 10), (5, 5, 5), (10, 10, 10)],
+                          'activation': ['tanh'],
+                          'alpha': np.logspace(-5, 3, 5)}
 
-        # Scaling X
-        # sc = StandardScaler()
-        # X_train_s = sc.fit_transform(X_train_stacking_with_predictions)
-        # X_test_s = sc.transform(X_test_stacking_with_predictions)
-        # best_models, best_score = do_grid_search([gdRf, gbXGB], X_train_s, y_train_stacking.values.ravel(), 10000, old_best_models,
-        #                             prefix,
-        #                             args.target)
+        gdANN = GridSearchCustomModel(
+            MLPClassifier(solver='lbfgs', random_state=42, verbose=False, max_iter=1200, early_stopping=True),
+            param_grid_ANN)
 
-        # m = [(str(model.best_estimator_), model.best_estimator_) for model in best_models]
-        # voting_classifier = VotingClassifier(estimators=m, voting='soft', n_jobs=-1)
-        # voting_classifier.fit(X_train_s, y_train_stacking.values.ravel())
-        # res = voting_classifier.predict(X_test_s)[0]
+        toAverage = []
+        for cool in dfs:
+            X_train = cool.X_train
 
-        # classes_s = voting_classifier.classes_
-        # probs_s = voting_classifier.predict_proba(X_test_s).tolist()[0]
-        # final_probs = []
-        # for a, b in zip(classes_s, classes):
-        #    assert a == b
+            y_train = cool.y_train
+            X_test = cool.X_test
+            l = cool.train_len
+            toTestX = cool.toTestX
+            toTestY = cool.toTestY
+            print("Training train_len = " + str(l))
 
-        # for p, c in zip(probs, probs_s):
-        #    final_probs.append((p + c) / 2.0)
+            try:
+                best_models, best_score = do_grid_search([gdRf, gdANN, gbXGB ], X_train, y_train.values.ravel(),
+                                                         10000,
+                                                         old_best_models, prefix,
+                                                         args.target)
 
-        # final_res = None
-        # high_prob = 0
-        # for p, c in zip(final_probs, classes_s):
-        #    if p > high_prob:
-        #        high_prob = p
-        #        final_res = c
+                for i in best_models:
+                    if "RandomForest" in str(i.best_estimator_):
+                        rf = i.best_estimator_
 
-        print("vot_stacking")
-        print(res)
-        # print(voting_classifier.predict_proba(X_test_s)[0])
-        # print(m[0][0])
-        # print(m[0][1].predict_proba(X_test_s)[0])
-        # print(m[1][0])
-        # print(m[1][1].predict_proba(X_test_s)[0])
+            except Exception as e:
+                print(e)
+                best_models = old_best_models
+                with open(prefix + "_" + args.target + "_LOG", 'a') as f:
+                    f.write(str(e))
 
-        # for i in best_models:
-        #     if "RandomForest" in str(i.best_estimator_):
-        #         rf = i.best_estimator_
-        #     else:
-        #         continue
-        #     feature_import = rf.feature_importances_.tolist()
-        #     new_list = [(importance, name) for name, importance in
-        #                 zip(X_train_stacking_with_predictions.columns.tolist(), feature_import)]
-        #     sorted_by_importance = sorted(new_list, key=lambda tup: tup[0], reverse=True)
-        #     featureToUse = sorted_by_importance
-        #     with open(prefix + "FS" + args.target, 'a') as f:
-        #         f.write("STACK\n")
-        #         f.write(str(featureToUse) + "\n")
+                os.remove(notification_file)
+                with open(result_file, 'w') as f:
+                    f.write("HOLD")
+                continue
+            good_ones = []
+            for model in best_models:
+                res_test = model.predict(toTestX)
+                f1_test = accuracy_score(toTestY.values.ravel(), res_test)
+                if f1_test < 0.58:
+                    print("Test before voting low" + str(f1_test))
+                    print("getting rid of " + (str(model.best_estimator_)))
+                    continue
+                else:
+                    print("test for " + (str(model.best_estimator_)) + str(f1_test))
+                    print("\n\n")
+                    good_ones.append(model)
+
+            if not good_ones:
+                os.remove(notification_file)
+                print("NO GOOD RESULT before votation skipping")
+                with open(result_file, 'w') as f:
+                    f.write("OUT")
+                continue
+
+            m = [(str(model.best_estimator_), model.best_estimator_) for model in good_ones]
+            voting_classifier = VotingClassifier(estimators=m, voting='soft', n_jobs=-1)
+            voting_classifier.fit(X_train, y_train.values.ravel())
+            res = voting_classifier.predict(X_test)[0]
+
+            # print("vot")
+            # print(res)
+            # print(voting_classifier.predict_proba(X_test)[0])
+            # print(m[0][0])
+            # print(m[0][1].predict_proba(X_test)[0])
+            # print(m[1][0])
+            # print(m[1][1].predict_proba(X_test)[0])
+            classes = list(voting_classifier.classes_)
+            probs = voting_classifier.predict_proba(X_test).tolist()[0]
+            r = 0.0
+            for i in best_score:
+                r += i
+            r = r / float(len(best_score))
+            best_score = r
+            if best_score < 0.45:
+                print("Skipping as best score is: " + str(best_score))
+            else:
+                res_test = voting_classifier.predict(toTestX)
+                f1_test = accuracy_score(toTestY.values.ravel(), res_test)
+                if f1_test < 0.52:
+                    print("Best TEST SCORE too low: SUCK!" + str(f1_test))
+                    continue
+                else:
+                    with open(test_file, 'a') as fp:
+                        fp.write("\n  Length: " + str(l) + " TEST SCORE: " + str(f1_test))
+                    print("\n  Length: " + str(l) + " Classifier TEST SCORE: " + str(f1_test))
+                    toAverage.append((classes, probs, l, f1_test))
+
+        print("Averaging results ")
+        if len(toAverage) == 0:
+            res = "OUT"
+            print("No Trade, no good models !!!")
+        else:
+            cl = toAverage[0][0]
+            kl = []
+            for _ in cl:
+                kl.append(0.0)
+            for c, p, lun, bs in toAverage:
+                assert c == cl
+                print("len: " + str(lun))
+                print("Prob " + str(p))
+                print("Score " + str(bs))
+                for i, v in enumerate(p):
+                    kl[i] += (bs * v)
+                with open(best_score_file, 'a') as f:
+                    f.write("\n")
+                    f.write(str(bs) + " ")
+                    f.write("\n")
+            index_max = 0
+            p_max = -1
+            for i, k in enumerate(kl):
+
+                if k > p_max:
+                    p_max = k
+                    index_max = i
+            res = cl[index_max]
+            print("RES: " + str(res))
+            print("PROB: " + str(p_max))
+            print("ALL PROBS:" + str(kl))
 
         with open(result_file, 'w') as f:
             f.write(res)
@@ -484,8 +381,8 @@ if __name__ == "__main__":
 
         counter += 1
         if res == "OUT":
-            counter += 1
-            counter %= round(AHEAD / 4)
+            counter = AHEAD - 3
+            # counter %= round(AHEAD)
         else:
             counter %= round(AHEAD)
 
