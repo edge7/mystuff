@@ -1,5 +1,5 @@
 from time import time
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 
 
 def fit_models(list_models, X, y):
@@ -10,7 +10,7 @@ def fit_models(list_models, X, y):
     return list_models
 
 
-def do_grid_search(list_models, X, y, counter, old_best_models, prefix = None, t =None):
+def do_grid_search(list_models, X, y, counter, old_best_models, prefix=None, t=None):
     to_return = []
     best_score = []
     print("Shape X \n")
@@ -18,27 +18,28 @@ def do_grid_search(list_models, X, y, counter, old_best_models, prefix = None, t
     print("#Columns Y \n")
     print(y.shape)
     c = -1
+
     for model in list_models:
         c += 1
         if counter < 29 and old_best_models is not None:
             to_return.append(old_best_models[c])
-            print("\n\n ***** NO MODEL GENERATED: " + str(model.model)[0:10]  + "\n")
+            print("\n\n ***** NO MODEL GENERATED: " + str(model.model)[0:10] + "\n")
             continue
-
+        my_cv = TimeSeriesSplit(n_splits=5).split(X)
         print("\n\n\n ***** NEW MODEL FOR MODEL " + str(model.model)[0:10] +
-                                     " is being generated ****\n\n\n")
+              " is being generated ****\n\n\n")
         print("Grid Search running for model \n")
         print(model.model)
         print("  ...  \n")
         start = time()
-        clf = GridSearchCV(model.model, model.params, refit=True, cv=7, n_jobs=-1, verbose=0, scoring='accuracy')
+        clf = GridSearchCV(model.model, model.params, refit=True, cv=my_cv, n_jobs=-1, verbose=0, scoring='f1_macro')
         clf.fit(X, y)
         end = time()
         elapsed = (end - start) / 60.0
         print("Grid Search done in " + str(elapsed) + " minutes\n")
-        print(" printing best parameters: \n")
+        print(" printing best parameters:")
         print(clf.best_params_)
-        print(" Print best score \n")
+        print(" Print best score:")
         print(clf.best_score_)
         best_score.append(abs(clf.best_score_))
         if prefix is not None:

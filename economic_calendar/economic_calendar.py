@@ -9,6 +9,8 @@ old_max_row = None
 
 def check_if_available(root_dir, target):
     toReturn = []
+    if target == "STOXX50":
+        target = "EURUSD"
     files = [item for item in os.listdir(root_dir) if os.path.isfile(os.path.join(root_dir, item))]
     for f in files:
         if f in target:

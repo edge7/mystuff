@@ -10,8 +10,8 @@ from sklearn.preprocessing import StandardScaler
 from algos.algos import adf
 
 SUBSET_SIZE = 1000
-THRESHOLD = 0
-AHEAD = 6 * 2
+THRESHOLD = 0.0000
+AHEAD = 15
 
 
 def apply_candle(row, toUse):
@@ -159,6 +159,18 @@ def add_candlestick_columns_2(df, toUse):
     df["BodyInPipsP"] = df["BodyInPips"].shift(1)
     df["Body/BodyP"] = pd.Series.abs(df["BodyInPips"] / df["BodyInPipsP"])
     df["Body/BodyPP"] = df["Body/BodyP"].shift(1)
+
+    for i in range(1, 6):
+        df["BodyInPips" + str(i)] = df["BodyInPips"].shift(i)
+        df["LowInPips" + str(i)] = df["LowInPips"].shift(i)
+        df["HighInPips" + str(i)] = df["HighInPips"].shift(i)
+        df["High/Body" + str(i)] = df["High/Body"].shift(i)
+        df["Low/Body" + str(i)] = df["Low/Body"].shift(i)
+        df["High/BodyP" + str(i)] = df["High/BodyP"].shift(i)
+        df["Low/BodyP" + str(i)] = df["Low/BodyP"].shift(i)
+        df["BodyInPipsP" + str(i)] = df["BodyInPipsP"].shift(i)
+        df["Body/BodyP" + str(i)] = df["Body/BodyP"].shift(i)
+        df["Body/BodyPP" + str(i)] = df["Body/BodyPP"].shift(i)
     return df
 
 
@@ -337,9 +349,9 @@ def create_dataframe(flist, excluded, crossList, keep_names=True):
                 # df[i + "_original - avg"] = df[i] - df[i].ewm(span=5, adjust=False).mean()
                 # df[i + "_original - avg"] = df[i] - df[i].rolling(window=4).mean()
             if "Close" in i:
-                df[i] = df[i].rolling(window=6).mean()
+                df[i] = df[i].rolling(window=1).mean()
         else:
-            df[i] = df[i].rolling(window=2).mean()
+            df[i] = df[i].rolling(window=1).mean()
 
         df['Gmt time'] = df['Gmt time'].apply(lambda x: x.replace(",", " "))
         # df = df.head(75).reset_index()
@@ -351,6 +363,7 @@ def create_dataframe(flist, excluded, crossList, keep_names=True):
 
 
 def apply_distance_from_max(df, target, window=50):
+    target = "Close_" + target
     df['dist_from_max_' + str(window)] = df[target] - df[target].rolling(window=window).apply(lambda x: np.max(x))
     return df
 
@@ -374,6 +387,7 @@ def apply_PROC(df, target, window=10):
 
 
 def apply_distance_from_min(df, target, window=50):
+    target = "Close_" + target
     df['dist_from_min_' + str(window)] = df[target] - df[target].rolling(window=window).apply(lambda x: np.min(x))
     return df
 
@@ -433,7 +447,7 @@ def apply_shift(df, excluded):
 
 def apply_shift_just_at(df, included):
     it = df.copy()
-    for i in [6 * 5, 6 * 10]:
+    for i in [30, 60]:
         for col in it:
             if any(ext in col for ext in included):
                 df[col + "_SHIFT_" + str(i)] = df[col].shift(i)
@@ -528,27 +542,30 @@ def create_dataframe_for_stacking(X_train_stacking, m, X_train):
     return X_train_stacking
 
 
-def create_target_ahead(df, CLOSE_VARIABLE, AHEAD, threshold):
+def create_target_ahead(df, CLOSE_VARIABLE, AHEAD, THRESHOLD):
     number_rows = df.shape[0]
     counter = 0
+    df.set_value(0, 'target', 'out')
+
     # Iterating row by row, check change after AHEAD candles
     for index in range(number_rows):
         start = df.iloc[[index]][CLOSE_VARIABLE][index]
         to_set = 0
-        to_set_ = "OUT"
+        to_set_ = nan
         end = min(number_rows, index + AHEAD + 1)
-        if counter == 0:
+        if counter == 0 or counter is not None:
             for next in range(index + 1, end):
                 value = df.iloc[[next]][CLOSE_VARIABLE][next]
-                pctg = value - start
-                if pctg > threshold:
-                    to_set += pctg
-                if pctg < - threshold:
-                    to_set += pctg
+                to_set = value - start
+                # if pctg > threshold:
+                #     to_set += pctg
+                #
+                # if pctg < - threshold:
+                #     to_set += pctg
 
-            if to_set > 0:
+            if to_set > THRESHOLD:
                 to_set_ = "BUY"
-            if to_set < 0:
+            if to_set < -THRESHOLD:
                 to_set_ = "SELL"
             df.set_value(index, 'target', to_set_)
             counter = round(AHEAD / 6)
@@ -913,7 +930,7 @@ def apply_macd(df, slow, fast):
             df[col + "_macdline"] = macd_line
             # df[col + "_signalline"] = signal_line
             # df[col + "_macdhist"] = macd_hist
-            df[col + "_price-mean25"] = df[col].rolling(window=10).mean() - df[col]
+            df[col + "_price-mean10"] = df[col].rolling(window=10).mean() - df[col]
             df[col + "_price-mean25"] = df[col].rolling(window=25).mean() - df[col]
             df[col + "_price-mean50"] = df[col].rolling(window=50).mean() - df[col]
             df[col + "_price-mean100"] = df[col].rolling(window=100).mean() - df[col]
